@@ -1091,6 +1091,24 @@ main > section:not(.hero) > .wrap, footer{position:relative;z-index:2}
     chips.forEach(c => c.classList.add('on')); okOpt.classList.add('ok');
   }
 
+  /* parallax: hero layers sit at different depths. The pointer shifts them by depth;
+     on scroll the text rises faster than the head (the head lags in story.js). Uses the
+     CSS `translate` property so it never fights GSAP's transforms. */
+  if (hasG && !RM) {
+    const fine = matchMedia('(pointer:fine)').matches;
+    const depth = [['.side .tag', 6], ['.hero .cd.c1', 14], ['.hero .cd.c2', 24], ['#rain', 34], ['#absorb', 34]].map(([q, d]) => [$$(q), d]);
+    const txt = $$('.hero h1, .hero .sub, .hero .ctas');
+    let px = 0, py = 0, cx = 0, cy = 0;
+    if (fine) addEventListener('pointermove', e => { px = e.clientX / innerWidth - .5; py = e.clientY / innerHeight - .5; }, { passive: true });
+    gsap.ticker.add(() => {
+      if (!heroOn) return;
+      cx += (px - cx) * .06; cy += (py - cy) * .06;
+      depth.forEach(([els, d]) => els.forEach(el => el.style.translate = `${(-cx * d).toFixed(2)}px ${(-cy * d * .6).toFixed(2)}px`));
+      const sy = Math.min(scrollY, innerHeight);
+      txt.forEach((el, i) => el.style.translate = `0 ${(-sy * (.28 + i * .06)).toFixed(1)}px`);
+    });
+  }
+
   /* code pours into the vibe-coder's head and falls straight through; concepts sink into the learner's */
   const rain = $('#rain'), absorb = $('#absorb'), arch = $('.photo-arch');
   const TOK = ['await fetch(url)', 'jwt.sign(user)', 'useEffect(() => {', 'as any', 'localStorage.setItem', '// TODO fix later', 'npm i stripe', '@ts-ignore', 'SELECT * FROM users', 'catch (e) {}', 'res.status(200)', 'eval(input)'];

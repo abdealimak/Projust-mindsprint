@@ -14,7 +14,7 @@ import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const N = innerWidth < 900 ? 16000 : 36000;
+const N = innerWidth < 900 ? 20000 : 46000;
 const T = 7;
 const $ = s => document.querySelector(s);
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -66,10 +66,14 @@ const VS = /* glsl */`
     float hero = 1.0 - clamp(m * 2.0, 0.0, 1.0);
     float side = smoothstep(uSplit - uSplitW, uSplit + uSplitW, p.x);
     float vibe = (1.0 - side) * hero * ik;
-    float leak = step(0.42, fract(aRand * 13.7));
-    float lt = fract(uTime * 0.08 + aRand * 5.3);
-    p.y -= vibe * leak * lt * lt * 2.4 * uS[0];
-    p.x -= vibe * leak * lt * 0.22 * uS[0];
+    float q = 0.07 * uS[0];
+    vec2 cell = (floor(p.xy / q) + 0.5) * q;
+    p.xy = mix(p.xy, cell + (vec2(hash(aRand * 51.0), hash(aRand * 77.0)) - 0.5) * q * 0.25, vibe * 0.92);
+    float flick = step(0.93, hash(floor(uTime * 8.0) + aRand * 311.0));
+    p.x += vibe * flick * (hash(aRand + floor(uTime * 8.0)) - 0.5) * q * 3.0;
+    float leak = step(0.5, fract(aRand * 13.7));
+    float lt = fract(uTime * 0.07 + aRand * 5.3);
+    p.y -= vibe * leak * lt * lt * 1.6 * uS[0];
 
     float dust = 1.0 - clamp(abs(m - 5.0), 0.0, 1.0);
     p.xy += vec2(sin(uTime * 0.6 + aRand * 60.0), cos(uTime * 0.5 + aRand * 45.0)) * uDrift * (1.0 + dust * 14.0);
@@ -87,13 +91,14 @@ const VS = /* glsl */`
     col = mix(col, vec3(0.37, 0.66, 0.19), scan);
     col = mix(col, vec3(1.0, 0.478, 0.239), tw);
     float al = mix(uAl[i] * shadeOf(i), uAl[j] * shadeOf(j), k);
-    col = mix(col, vec3(0.6, 0.58, 0.54), vibe * 0.85);
-    al *= 1.0 - vibe * (0.45 + 0.5 * leak * lt);
+    col = mix(col, vec3(0.64, 0.62, 0.58), vibe);
+    al = mix(al, 0.16 + 0.22 * al, vibe) * (1.0 - vibe * leak * lt * 0.9);
+    al *= 1.0 - vibe * flick * 0.6;
     al = clamp(al + scan * 0.6 + tw * 0.9, 0.0, 1.0) * (0.15 + 0.85 * ik);
     vC = vec4(col, al);
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_PointSize = mix(uSz[i], uSz[j], k) * uPix * (0.65 + aRand * 0.7) * (1.0 + scan * 0.8 + tw * 1.6);
+    gl_PointSize = mix(uSz[i], uSz[j], k) * uPix * mix(0.65 + aRand * 0.7, 0.85, vibe) * (1.0 + scan * 0.8 + tw * 1.6);
     gl_Position = projectionMatrix * mv;
   }`;
 const FS = /* glsl */`
@@ -109,7 +114,7 @@ const STREAM_VS = /* glsl */`
   void main(){
     float t = fract(uTime * 0.11 + aOff);
     vec3 f = uRot0 * aFrom, to = uRot0 * aTo;
-    vec3 mid = mix(f, to, 0.5) + vec3(0.0, 0.35, 0.6);
+    vec3 mid = mix(f, to, 0.5) + vec3(0.0, 0.25, 0.5);
     vec3 p = mix(mix(f, mid, t), mix(mid, to, t), t) * uS0 + uA0;
     vA = sin(t * 3.14159) * uOn; vCl = aCol;
     gl_PointSize = uPix * (3.4 - t * 2.0);
@@ -120,6 +125,7 @@ const STREAM_FS = /* glsl */`
   void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; gl_FragColor = vec4(vCl, vA * exp(-d * d * 14.0)); }`;
 
 /* ================= the head scan, weighted toward detail ================= */
+// The scan is a full bust: head, neck and shoulders, 2 units tall (y -1..1).
 async function loadHead() {
   const gltf = await new GLTFLoader().loadAsync('assets/models/head.glb');
   let mesh; gltf.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
@@ -137,28 +143,46 @@ async function loadHead() {
     if (d < 0) { for (let i = 0; i < Nn.length; i++) Nn[i] = -Nn[i]; g.attributes.normal.needsUpdate = true; }
     console.info('head normals', d < 0 ? 'flipped' : 'ok');
   }
-  // curvature per vertex: how far its normal turns from its neighbours'.
-  // Eyes, nose, lips and ears turn sharply, so they get more dots.
-  const n = g.attributes.normal.array, idx = g.index.array, nv = g.attributes.position.count;
-  const acc = new Float32Array(nv * 3);
+  // Per vertex, from its ring of neighbours:
+  //  curvature: how far its normal turns (eyes, nose, lips, ears turn sharply, so they get more dots)
+  //  hollow: how far it sits below its neighbours along the normal (sockets, nostrils, lip line)
+  const P = g.attributes.position.array, n = g.attributes.normal.array, idx = g.index.array, nv = g.attributes.position.count;
+  const accN = new Float32Array(nv * 3), accP = new Float32Array(nv * 3), cnt = new Float32Array(nv);
   for (let f = 0; f < idx.length; f += 3) {
     const v = [idx[f], idx[f + 1], idx[f + 2]];
     for (let e = 0; e < 3; e++) { const a = v[e], b = v[(e + 1) % 3];
-      acc[a * 3] += n[b * 3]; acc[a * 3 + 1] += n[b * 3 + 1]; acc[a * 3 + 2] += n[b * 3 + 2];
-      acc[b * 3] += n[a * 3]; acc[b * 3 + 1] += n[a * 3 + 1]; acc[b * 3 + 2] += n[a * 3 + 2]; }
+      for (let q = 0; q < 3; q++) { accN[a * 3 + q] += n[b * 3 + q]; accN[b * 3 + q] += n[a * 3 + q]; accP[a * 3 + q] += P[b * 3 + q]; accP[b * 3 + q] += P[a * 3 + q]; }
+      cnt[a]++; cnt[b]++; }
   }
-  const curv = new Float32Array(nv);
+  const curv = new Float32Array(nv), hol = new Float32Array(nv);
   for (let v = 0; v < nv; v++) {
-    const x = acc[v * 3], y = acc[v * 3 + 1], z = acc[v * 3 + 2], l = Math.hypot(x, y, z) || 1;
+    const x = accN[v * 3], y = accN[v * 3 + 1], z = accN[v * 3 + 2], l = Math.hypot(x, y, z) || 1;
     curv[v] = 1 - (n[v * 3] * x + n[v * 3 + 1] * y + n[v * 3 + 2] * z) / l;
+    const k = cnt[v] || 1;
+    hol[v] = ((accP[v * 3] / k - P[v * 3]) * n[v * 3] + (accP[v * 3 + 1] / k - P[v * 3 + 1]) * n[v * 3 + 1] + (accP[v * 3 + 2] / k - P[v * 3 + 2]) * n[v * 3 + 2]);
   }
-  const sorted = Array.from(curv).sort((a, b) => a - b), p95 = sorted[Math.floor(nv * 0.95)] || 1;
-  const w = new Float32Array(nv);
+  const pct = (arr, q) => { const t = Array.from(arr).sort((a, b) => a - b); return t[Math.floor(t.length * q)] || 1; };
+  const p95 = pct(curv, 0.95), h95 = Math.max(1e-6, pct(hol, 0.96));
+  const w = new Float32Array(nv), col = new Float32Array(nv * 3);
   for (let v = 0; v < nv; v++) {
-    const front = g.attributes.position.array[v * 3 + 2] > 0 ? 1.25 : 0.7;   // the face matters more than the back
-    w[v] = (0.3 + 2.4 * Math.min(1, curv[v] / p95)) * front;
+    const y = P[v * 3 + 1], z = P[v * 3 + 2];
+    const face = z > 0.05 && y > -0.35 ? 1.9 : 1;                // the face gets most of the ink
+    const front = z > 0 ? 1.15 : 0.55, body = y < -0.35 ? 0.55 : 1; // the back and shoulders get less
+    w[v] = (0.3 + 2.6 * Math.min(1, curv[v] / p95)) * front * face * body;
+    col[v * 3] = Math.max(0, Math.min(1, hol[v] / h95));         // 0 flat or bulging, 1 deep hollow
   }
+  // The scan has a mouth cavity behind the lips. With no depth test its dots show through
+  // the face as a dark ring, so drop anything sitting well behind the front surface there.
+  const cell = (x, y) => Math.round(x / 0.04) * 1000 + Math.round(y / 0.04), front = new Map();
+  for (let v = 0; v < nv; v++) { const k = cell(P[v * 3], P[v * 3 + 1]), z = P[v * 3 + 2]; if (z > 0 && z > (front.get(k) ?? -9)) front.set(k, z); }
+  let cav = 0;
+  for (let v = 0; v < nv; v++) {
+    const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    if (Math.abs(x) < 0.26 && y > -0.34 && y < 0.24 && z > -0.12) { const f = front.get(cell(x, y)); if (f !== undefined && z < f - 0.08) { w[v] = 0; cav++; } }
+  }
+  console.info('mouth cavity verts hidden', cav);
   g.setAttribute('w', new THREE.BufferAttribute(w, 1));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const m = new THREE.Mesh(g);
   return new MeshSurfaceSampler(m).setWeightAttribute('w').build();
 }
@@ -171,69 +195,48 @@ class Target {
 }
 
 const L = new THREE.Vector3(-0.62, 0.42, 0.66).normalize();
-function shadeAt(p, n) {
-  // ink on paper: shadows get dense dark dots, highlights stay light
-  const lam = Math.max(0, n.dot(L)), facing = smooth(-0.25, 0.3, n.z);
-  const rim = Math.pow(1 - Math.abs(n.z), 2.5) * 0.45 * facing;
-  const dark = 1 - lam;
-  const hatch = dark > 0.55 ? ((((p.y * 0.8 + p.x * 0.6) * 30) % 1 + 1) % 1 < 0.5 ? 1 : 0.45) : 1;
-  return Math.min(1, Math.max(0.02, facing * (0.1 + 0.88 * Math.pow(dark, 1.3)) * hatch + rim));
-}
-
-function bustPoint(v, nn) {
-  const r = Math.random();
-  if (r < 0.26) {                                    // neck, leaning slightly forward
-    const u = Math.random(), a = Math.random() * Math.PI * 2;
-    const y = -0.55 - u * 0.85, rx = 0.33 + u * 0.08, rz = 0.35 + u * 0.03;
-    v.set(Math.sin(a) * rx, y, Math.cos(a) * rz - 0.2 + u * 0.06); nn.set(Math.sin(a), 0.1, Math.cos(a));
-  } else if (r < 0.34) {                             // T-shirt collar, dipping at the front
-    const a = Math.random() * Math.PI * 2, cf = Math.max(0, Math.cos(a));
-    v.set(Math.sin(a) * 0.5, -1.36 - 0.16 * cf * cf + (Math.random() - 0.5) * 0.03, Math.cos(a) * 0.44 - 0.16); nn.set(Math.sin(a), 0.4, Math.cos(a));
-  } else if (r < 0.39) {                             // collarbones
-    const s = Math.random() < 0.5 ? -1 : 1, x = 0.2 + Math.random() * 0.75;
-    v.set(s * x, -1.52 - 0.05 * Math.sin(x * 3.2) + (Math.random() - 0.5) * 0.02, 0.3 - 0.22 * x * x); nn.set(s * 0.2, 0.5, 0.85);
-  } else {                                           // shoulders and chest
-    const u = Math.random(), a = Math.random() * Math.PI * 2;
-    const W = 0.44 + 1.12 * smooth(0, 0.4, u) + 0.05 * u, D = 0.42 + 0.2 * smooth(0, 0.5, u);
-    const x = Math.sin(a) * W, z = Math.cos(a) * D - 0.22;
-    const y = -1.35 - u * 1.55 - 0.3 * Math.pow(Math.abs(x) / 1.6, 2.4) * (1 - u * 0.5);
-    v.set(x, y, z); nn.set(Math.sin(a), 0.35 * (1 - u), Math.cos(a));
-  }
-  nn.normalize();
+function shadeAt(p, n, hollow = 0, base = 1) {
+  // ink on paper: shadows and hollows get dense dark dots, highlights stay light
+  const lam = Math.max(0, n.dot(L)), facing = smooth(-0.3, 0.35, n.z);
+  const rim = Math.pow(1 - Math.abs(n.z), 3) * 0.32 * facing;
+  const dark = Math.min(1, 1 - lam + hollow * 0.75);
+  const hatch = dark > 0.6 ? ((((p.y * 0.8 + p.x * 0.6) * 34) % 1 + 1) % 1 < 0.5 ? 1 : 0.5) : 1;
+  return Math.min(1, Math.max(0.02, (facing * (0.06 + 0.9 * Math.pow(dark, 1.5)) * hatch + rim) * base));
 }
 
 const CAP_BOARD = new THREE.Matrix4().makeRotationY(Math.PI / 4).premultiply(new THREE.Matrix4().makeRotationX(-0.16));
 function capPoint(v, nn) {
-  const t = Math.random(), BY = 1.02, H = 0.8, R = 0.6; let kind = 0;
+  const t = Math.random(), BY = 1.0, H = 0.66, R = 0.47; let kind = 0;
   if (t < 0.3) {
-    const a = Math.random() * Math.PI * 2, y = 0.66 + Math.random() * (BY - 0.66);
-    v.set(Math.cos(a) * R, y, Math.sin(a) * R * 1.1 - 0.12); nn.set(Math.cos(a), 0, Math.sin(a));
+    const a = Math.random() * Math.PI * 2, y = 0.74 + Math.random() * (BY - 0.74);
+    v.set(Math.cos(a) * R, y, Math.sin(a) * R * 1.12 + 0.02); nn.set(Math.cos(a), 0, Math.sin(a));
   } else if (t < 0.87) {
     let x = (Math.random() * 2 - 1) * H, z = (Math.random() * 2 - 1) * H;
     if (Math.random() < 0.32) { if (Math.random() < 0.5) x = Math.sign(x) * H; else z = Math.sign(z) * H; }
-    v.set(x, Math.random() < 0.6 ? 0 : -0.035, z).applyMatrix4(CAP_BOARD); v.y += BY; v.z -= 0.12;
+    v.set(x, Math.random() < 0.6 ? 0 : -0.03, z).applyMatrix4(CAP_BOARD); v.y += BY; v.z += 0.02;
     nn.set(0, 1, 0).applyMatrix4(CAP_BOARD).add(new THREE.Vector3(0, 0, 0.6));
   } else {
     const u = Math.random(), corner = new THREE.Vector3(H * 0.98, 0.01, 0).applyMatrix4(CAP_BOARD);
     if (u < 0.4) v.set(0, 0.03, 0).applyMatrix4(CAP_BOARD).lerp(corner, u / 0.4);
-    else { const sp = u > 0.85 ? 2.2 : 1; v.copy(corner); v.y -= (u - 0.4) / 0.6 * 0.62; v.x += (Math.random() - 0.5) * 0.05 * sp; v.z += (Math.random() - 0.5) * 0.05 * sp; }
-    v.y += BY; v.z -= 0.12; nn.set(0, 0, 1); kind = 1;
+    else { const sp = u > 0.85 ? 2.2 : 1; v.copy(corner); v.y -= (u - 0.4) / 0.6 * 0.5; v.x += (Math.random() - 0.5) * 0.05 * sp; v.z += (Math.random() - 0.5) * 0.05 * sp; }
+    v.y += BY; v.z += 0.02; nn.set(0, 0, 1); kind = 1;
   }
   nn.normalize(); return kind;
 }
 
-// The student: head, bust and (optionally) cap, turned by `rot`, then scaled and moved.
-function addFigure(t, sampler, count, rot, scale = 1, off = [0, 0, 0], cap = true, slot = 0) {
+// The student: the scanned bust and (optionally) a cap, turned by `rot`, then scaled and moved.
+function addFigure(t, sampler, count, rot, scale = 1, off = [0, 0, 0], cap = true) {
   const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rot[0], rot[1], rot[2], 'YXZ'));
-  const v = new THREE.Vector3(), nn = new THREE.Vector3();
-  const nHead = Math.round(count * (cap ? 0.66 : 0.74)), nBust = Math.round(count * 0.22);
+  const v = new THREE.Vector3(), nn = new THREE.Vector3(), cl = new THREE.Color();
+  const nHead = Math.round(count * (cap ? 0.9 : 1));
   for (let c = 0; c < count; c++) {
-    let kind = 0;
-    if (c < nHead) sampler.sample(v, nn);
-    else if (c < nHead + nBust) bustPoint(v, nn);
-    else if (cap) kind = capPoint(v, nn); else bustPoint(v, nn);
+    let kind = 0, hollow = 0, base = 1;
+    if (c < nHead) {
+      sampler.sample(v, nn, cl); hollow = cl.r;
+      base = smooth(-1.0, -0.62, v.y);               // shoulders dissolve, no hard cut line
+    } else kind = capPoint(v, nn);
     v.applyMatrix4(R); nn.transformDirection(R);
-    let sh = shadeAt(v, nn); if (kind === 1) sh = Math.max(sh, 0.75);
+    let sh = shadeAt(v, nn, hollow, base); if (kind === 1) sh = Math.max(sh, 0.75);
     t.push(v.x * scale + off[0], v.y * scale + off[1], v.z * scale + off[2], kind, sh);
   }
 }
@@ -329,8 +332,8 @@ function streams(t0, count) {
   for (let i = 0; i < count; i++) {
     // knowledge only flows in from the learner's side (right)
     const lane = i % 5;
-    from.set([1.9 + Math.random() * 0.9, -0.5 + lane * 0.38 + (Math.random() - 0.5) * 0.2, -0.3 + Math.random() * 0.9], i * 3);
-    let j, tries = 0; do { j = (Math.random() * N) | 0; tries++; } while ((t0.p[j * 3 + 1] < 0.1 || t0.p[j * 3] < 0.12 || t0.k[j] !== 0) && tries < 40);
+    from.set([1.7 + Math.random() * 0.9, -0.2 + lane * 0.3 + (Math.random() - 0.5) * 0.2, -0.2 + Math.random() * 0.8], i * 3);
+    let j, tries = 0; do { j = (Math.random() * N) | 0; tries++; } while ((t0.p[j * 3 + 1] < 0.15 || t0.p[j * 3] < 0.08 || t0.p[j * 3 + 2] < 0 || t0.k[j] !== 0) && tries < 60);
     to.set([t0.p[j * 3], t0.p[j * 3 + 1], t0.p[j * 3 + 2]], i * 3);
     off[i] = lane * 0.2 + Math.random() * 0.2; col.set([C[lane].r, C[lane].g, C[lane].b], i * 3);
   }
@@ -351,8 +354,8 @@ async function main() {
   // facing forward, so the split line runs down the middle of the face
   tg[0] = new Target(); addFigure(tg[0], sampler, N, [-0.08, -0.04, 0]);
   // 1 story: looking down, with the unanswered question above
-  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.74), [0.36, 0.78, 0], 0.82, [-0.55, -0.45, 0], false);
-  glyphPoints(tg[1], '?', N - tg[1].i, 1.6, [0.95, 1.05, 0.3], 1);
+  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.74), [0.42, 0.7, 0], 1.0, [-0.2, -0.55, 0], false);
+  glyphPoints(tg[1], '?', N - tg[1].i, 1.25, [0.85, 0.75, 0.3], 1);
   tg[2] = new Target(); buildGraph(tg[2]);
   tg[3] = new Target(); buildRadar(tg[3]);
   tg[4] = new Target(); buildSeal(tg[4]);
@@ -426,10 +429,10 @@ async function main() {
     U.uM.value = m;
     // anchors follow their sections live
     let r = el.arch.getBoundingClientRect();
-    const headPx = Math.min(H * 0.52, 500);
-    toW(r.left + r.width / 2, r.top + headPx * 0.64, U.uA.value[0]); U.uS.value[0] = headPx / 2 / ppw;
+    const headPx = Math.min(r.height * 1.12, H * 0.66, 660);
+    toW(r.left + r.width / 2, r.bottom - headPx * 0.36 + scrollY * 0.22, U.uA.value[0]); U.uS.value[0] = headPx / 2 / ppw;   // + scroll: the head lags behind the page (parallax)
     r = el.story.getBoundingClientRect();
-    toW(r.left + r.width / 2, r.top + r.height * 0.5, U.uA.value[1]); U.uS.value[1] = r.height * 0.95 / 4.2 / ppw;
+    toW(r.left + r.width / 2, r.top + r.height * 0.5, U.uA.value[1]); U.uS.value[1] = r.height * 0.95 / 3.2 / ppw;
     r = el.app.getBoundingClientRect();
     toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[2]); U.uS.value[2] = r.width / 2 / ppw;
     const ctm = el.radar.getScreenCTM();
@@ -438,7 +441,7 @@ async function main() {
     toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[4]); U.uS.value[4] = Math.max(r.width, r.height) * 0.6 / ppw;
     toW(W / 2, H / 2, U.uA.value[5]); U.uS.value[5] = W * 0.55 / ppw;
     r = el.close.getBoundingClientRect();
-    toW(W / 2, r.top + r.height * 0.5, U.uA.value[6]); U.uS.value[6] = H * 0.34 / ppw;
+    toW(W / 2, r.top + r.height * 0.5, U.uA.value[6]); U.uS.value[6] = H * 0.42 / ppw;
 
     // dark band
     const cr = cert.getBoundingClientRect(), dk = cr.top < H * 0.55 && cr.bottom > H * 0.45 ? 1 : 0;
