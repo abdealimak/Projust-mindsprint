@@ -98,7 +98,7 @@ export const ConceptExplainer: React.FC<ExplainerProps> = (props) => {
       <Brand />
       <ProgressRule total={total} />
 
-      <MusicBed total={total} />
+      <MusicBed total={total} cues={explainerCues(props)} />
       {scenes.slice(1).map((s) => (
         <Sfx key={s.key} src={SFX.whoosh} at={s.from - 4} volume={0.35} frames={25} />
       ))}

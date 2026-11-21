@@ -177,7 +177,7 @@ export const CertificateReveal: React.FC<CertificateRevealProps> = (p) => {
       </div>
       </div>
 
-      <MusicBed total={CERT_REVEAL_FRAMES} volume={0.14} />
+      <MusicBed total={CERT_REVEAL_FRAMES} volume={0.16} cues={certificateCues(p)} />
       <Sfx src={SFX.riser} at={0} volume={0.3} frames={45} />
       <Sfx src={SFX.whoosh} at={6} volume={0.4} frames={25} />
       <Sfx src={SFX.pop} at={24} volume={0.3} frames={12} />

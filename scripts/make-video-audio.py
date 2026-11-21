@@ -52,32 +52,60 @@ def note(n):
     return 440.0 * 2 ** ((n - 69) / 12)
 
 
+def loop_reverb(x, mix=0.28):
+    """Feedback-comb reverb done with circular shifts, so the tail wraps and the loop stays seamless."""
+    wet = np.zeros_like(x)
+    for d_ms, g in [(97, 0.55), (131, 0.5), (173, 0.45), (229, 0.4)]:
+        d = int(SR * d_ms / 1000)
+        acc = x.copy()
+        for k in range(1, 7):
+            acc = acc + (g ** k) * np.roll(x, d * k)
+        wet += acc
+    wet = lowpass(wet, 3200)
+    return (1 - mix) * x + mix * wet / np.max(np.abs(wet)) * np.max(np.abs(x))
+
+
 def music_bed():
-    """16 s loopable pad: Cmaj9 → Am9 → Fmaj7 → G6sus, with a soft plucked arpeggio."""
+    """16 s loopable stereo pad: Cmaj9 → Am9 → Fmaj7 → G6sus, soft bass, panned arpeggio."""
     bar = 4.0
     chords = [[48, 55, 59, 62, 64], [45, 52, 55, 59, 60], [41, 48, 52, 55, 57], [43, 50, 55, 57, 62]]
-    total = np.zeros(int(SR * bar * 4))
+    n = int(SR * bar * 4)
+    L, R = np.zeros(n), np.zeros(n)
+
+    def add(buf, sig, start):
+        """Add sig at start, wrapping past the end so the loop is seamless."""
+        idx = (start + np.arange(len(sig))) % n
+        np.add.at(buf, idx, sig)
+
     for ci, ch in enumerate(chords):
         tt = t(bar + 1.5)
-        pad = sum(0.6 * np.sin(2 * np.pi * note(n) * tt) + 0.25 * tri(note(n) * 1.002, tt) for n in ch) / len(ch)
-        pad *= env(len(tt), a=1.2, r=1.6)
+        e = env(len(tt), a=1.2, r=1.6)
         start = int(SR * bar * ci)
-        seg = pad[: len(total) - start]
-        total[start : start + len(seg)] += seg * 0.55
-        # tail wraps to the start so the loop is seamless
-        rest = pad[len(seg) :]
-        total[: len(rest)] += rest * 0.55
-        # arpeggio: 8 soft plucks per bar
+        # detuned pad voices, spread left/right for width
+        padL = sum(0.6 * np.sin(2 * np.pi * note(m) * 0.998 * tt) + 0.22 * tri(note(m) * 1.003, tt) for m in ch) / len(ch)
+        padR = sum(0.6 * np.sin(2 * np.pi * note(m) * 1.002 * tt) + 0.22 * tri(note(m) * 0.997, tt) for m in ch) / len(ch)
+        add(L, padL * e * 0.5, start)
+        add(R, padR * e * 0.5, start)
+        # soft sub bass on the root
+        bt = t(bar)
+        bass = np.sin(2 * np.pi * note(ch[0] - 12) * bt) * env(len(bt), a=0.08, r=1.2) * 0.22
+        add(L, bass, start)
+        add(R, bass, start)
+        # arpeggio: 8 soft plucks per bar, alternating sides
         arp = [ch[2] + 12, ch[3] + 12, ch[4] + 12, ch[3] + 12]
         for k in range(8):
             pt = t(0.9)
             f = note(arp[k % 4])
-            pl = (np.sin(2 * np.pi * f * pt) + 0.3 * np.sin(4 * np.pi * f * pt)) * np.exp(-pt * 6)
-            s = start + int(SR * k * bar / 8)
-            e = min(len(total), s + len(pl))
-            total[s:e] += pl[: e - s] * 0.12
-    total = lowpass(total, 2400)
-    return total / np.max(np.abs(total)) * 0.5
+            pl = (np.sin(2 * np.pi * f * pt) + 0.3 * np.sin(4 * np.pi * f * pt)) * np.exp(-pt * 6) * np.minimum(1, pt * 400)
+            s0 = start + int(SR * k * bar / 8)
+            pan = 0.3 if k % 2 else 0.7
+            add(L, pl * 0.11 * (1 - pan) * 2, s0)
+            add(R, pl * 0.11 * pan * 2, s0)
+    L, R = lowpass(L, 2600), lowpass(R, 2600)
+    L, R = loop_reverb(L), loop_reverb(R)
+    x = np.stack([L, R])
+    x = np.tanh(x / np.max(np.abs(x)) * 1.2) / np.tanh(1.2)  # gentle glue
+    return x * 0.6
 
 
 def whoosh():
@@ -129,23 +157,34 @@ def riser():
     return x / np.max(np.abs(x)) * 0.4
 
 
-def write_mp3(name, x):
+def finish(x):
+    """Short fade-out so no effect ends on a click."""
+    x = np.atleast_2d(x).astype(np.float64)
+    nf = min(x.shape[1], int(SR * 0.012))
+    x[:, -nf:] *= np.linspace(1, 0, nf)
+    return x
+
+
+def write_mp3(name, x, loop=False):
+    x = np.atleast_2d(x) if loop else finish(x)
     x = np.clip(x, -1, 1)
-    pcm = (x * 32767).astype(np.int16)
+    ch = x.shape[0]
+    pcm = (x.T * 32767).astype(np.int16)
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
         tmp = f.name
     with wave.open(tmp, 'wb') as w:
-        w.setnchannels(1)
+        w.setnchannels(ch)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
     out = os.path.join(OUT, f'{name}.mp3')
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', tmp, '-codec:a', 'libmp3lame', '-b:a', '96k', out], check=True)
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', tmp, '-codec:a', 'libmp3lame', '-b:a', '160k' if ch == 2 else '96k', out], check=True)
     os.remove(tmp)
     print('wrote', os.path.relpath(out))
 
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
-    for name, fn in [('bed', music_bed), ('whoosh', whoosh), ('tick', tick), ('pop', pop), ('stamp', stamp), ('chime', chime), ('riser', riser)]:
+    write_mp3('bed', music_bed(), loop=True)
+    for name, fn in [('whoosh', whoosh), ('tick', tick), ('pop', pop), ('stamp', stamp), ('chime', chime), ('riser', riser)]:
         write_mp3(name, fn())

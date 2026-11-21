@@ -19,15 +19,23 @@ type Cue = { from: number; text: string };
 
 const playerStyle: React.CSSProperties = { width: '100%', aspectRatio: '16 / 9', borderRadius: 14, overflow: 'hidden' };
 
+let cachedVoice: SpeechSynthesisVoice | null = null;
+
 function pickVoice(): SpeechSynthesisVoice | null {
+  if (cachedVoice) return cachedVoice;
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('en'));
-  const prefer = [/natural/i, /google us english/i, /samantha/i, /daniel/i, /karen/i, /google uk english/i];
+  const prefer = [/natural/i, /neural/i, /premium/i, /enhanced/i, /google us english/i, /samantha/i, /daniel/i, /karen/i, /google uk english/i];
   for (const re of prefer) {
     const v = voices.find((x) => re.test(x.name));
-    if (v) return v;
+    if (v) return (cachedVoice = v);
   }
-  return voices.find((v) => v.default) || voices[0] || null;
+  const v = voices.find((x) => x.default) || voices[0] || null;
+  if (v) cachedVoice = v;
+  return v;
 }
+
+/** Split into sentences: Chrome cuts off long utterances, and short ones resync better. */
+const sentences = (text: string) => text.match(/[^.!?]+[.!?]*/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
 
 function useNarration(ref: React.RefObject<PlayerRef>, cues: Cue[], enabled: boolean) {
   const cuesRef = useRef(cues);
@@ -55,12 +63,20 @@ function useNarration(ref: React.RefObject<PlayerRef>, cues: Cue[], enabled: boo
       synth.cancel();
       spoken = idx;
       if (idx < 0 || muted) return;
-      const u = new SpeechSynthesisUtterance(cuesRef.current[idx].text);
       const v = pickVoice();
-      if (v) u.voice = v;
-      u.rate = 1.0;
-      u.pitch = 1.0;
-      synth.speak(u);
+      const rate = 1;
+      const volume = Math.min(1, Math.max(0, player.getVolume?.() ?? 1));
+      for (const part of sentences(cuesRef.current[idx].text)) {
+        const u = new SpeechSynthesisUtterance(part);
+        if (v) {
+          u.voice = v;
+          u.lang = v.lang;
+        }
+        u.rate = rate;
+        u.pitch = 1.0;
+        u.volume = volume;
+        synth.speak(u);
+      }
     };
 
     const onFrame = (e: { detail: { frame: number } }) => {
@@ -88,7 +104,12 @@ function useNarration(ref: React.RefObject<PlayerRef>, cues: Cue[], enabled: boo
     };
 
     // Voices load asynchronously in some browsers
+    const onVoices = () => {
+      cachedVoice = null;
+      pickVoice();
+    };
     synth.getVoices();
+    synth.addEventListener?.('voiceschanged', onVoices);
     player.addEventListener('frameupdate', onFrame);
     player.addEventListener('play', onPlay);
     player.addEventListener('pause', stop);
@@ -103,6 +124,7 @@ function useNarration(ref: React.RefObject<PlayerRef>, cues: Cue[], enabled: boo
       player.removeEventListener('ended', stop);
       player.removeEventListener('seeked', onSeek);
       player.removeEventListener('mutechange', onMute);
+      synth.removeEventListener?.('voiceschanged', onVoices);
       synth.cancel();
     };
   }, [ref, enabled]);
@@ -149,7 +171,7 @@ function Shell({ voice, setVoice, children }: { voice: boolean; setVoice: (v: bo
     <div className="flex flex-col gap-3">
       {children}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-muted">
-        <span>Music and sound are in the video. The voice is your browser&rsquo;s built-in speech.</span>
+        <span>Music dips while the voice talks. The voice is your browser&rsquo;s built-in speech.</span>
         <VoiceToggle on={voice} onChange={setVoice} />
       </div>
     </div>
