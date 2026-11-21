@@ -22,13 +22,13 @@ Open http://localhost:4321.
 
 | # | Section | What it shows | Dotted character |
 |---|---|---|---|
-| 0 | Hero | "Proof you understand *the code you shipped.*", glass cards orbiting | The student with a graduation cap, looking up, with knowledge streams flowing into the head and a reading scan |
+| 0 | Hero | "Same repo. Two students. *Only one can explain it.*" A draggable line splits the stage: vibe-coded (AI prompt, code falling through, failed viva) vs learned with Projust (tutor on their own line, quiz, concepts sinking in) | One head, split down the face: grey dots leak away on the vibe side; ink dots, streams and the reading scan on the learner side |
 | 1 | The gap | The professor's unanswered question, read word by word | The student looking down under an orange "?" |
 | 2 | The loop | A pinned 4-step app demo: import, concept map, tutor, quiz | A concept constellation around the app window |
 | 3 | The score | A six-skill radar going from locked to opened, with scores counting up | The radar web |
 | 3b | Rubric | How one answer becomes a score, line by line | (the radar scrolls past) |
 | 4 | The proof | The certificate: ID, QR, version history, verify tag | A certificate seal around the paper, light on the dark band |
-| 5 | The people | Students, teachers, recruiters, companies; integrity layers; pricing in ₹ | Drifting dust |
+| 5 | The people | Students, teachers, recruiters, companies; pricing in ₹; a notes wall with a live composer (Example cards until real feedback arrives) | Drifting dust |
 | 6 | Close | "Built it? *Prove it.*" plus a concept marquee | The student again, facing forward |
 
 A chapter rail on the left (01 The gap … 05 The people) tracks the story as you scroll.

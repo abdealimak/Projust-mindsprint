@@ -25,7 +25,7 @@ const VS = /* glsl */`
   attribute vec4 aKA; attribute vec3 aKB; attribute float aRand;
   uniform vec3 uA[7]; uniform float uS[7]; uniform float uAl[7]; uniform float uSz[7];
   uniform mat3 uRot0;
-  uniform float uM, uTime, uIntro, uPix, uDark, uScanY, uScanOn, uMouseOn, uMouseR, uDrift;
+  uniform float uM, uTime, uIntro, uPix, uDark, uScanY, uScanOn, uMouseOn, uMouseR, uDrift, uSplit, uSplitW;
   uniform vec2 uMouse;
   varying vec4 vC;
 
@@ -61,15 +61,25 @@ const VS = /* glsl */`
     float ik = clamp(uIntro * 1.6 - aRand * 0.6, 0.0, 1.0); ik = 1.0 - pow(1.0 - ik, 3.0);
     p = mix(sc, p, ik);
 
+    // hero split: left of the line is the vibe-coder. Their dots go grey and a
+    // share of them leak out and fall away; nothing they "learned" stays put.
+    float hero = 1.0 - clamp(m * 2.0, 0.0, 1.0);
+    float side = smoothstep(uSplit - uSplitW, uSplit + uSplitW, p.x);
+    float vibe = (1.0 - side) * hero * ik;
+    float leak = step(0.42, fract(aRand * 13.7));
+    float lt = fract(uTime * 0.08 + aRand * 5.3);
+    p.y -= vibe * leak * lt * lt * 2.4 * uS[0];
+    p.x -= vibe * leak * lt * 0.22 * uS[0];
+
     float dust = 1.0 - clamp(abs(m - 5.0), 0.0, 1.0);
     p.xy += vec2(sin(uTime * 0.6 + aRand * 60.0), cos(uTime * 0.5 + aRand * 45.0)) * uDrift * (1.0 + dust * 14.0);
 
     vec2 dm = p.xy - uMouse; float dl = length(dm);
     p.xy += normalize(dm + 1e-5) * smoothstep(uMouseR, 0.0, dl) * uMouseR * 0.45 * uMouseOn;
 
-    float hero = 1.0 - clamp(m * 2.0, 0.0, 1.0);
-    float scan = smoothstep(0.06, 0.0, abs(lp(0).y - uScanY)) * uScanOn * hero;
-    float tw = step(0.997, hash(aRand * 917.3 + floor(uTime * 2.5 + aRand * 9.0))) * hero * ik;
+    float lit = mix(1.0, side, hero);   // scan + twinkles only on the learner's side
+    float scan = smoothstep(0.06, 0.0, abs(lp(0).y - uScanY)) * uScanOn * hero * lit;
+    float tw = step(0.997, hash(aRand * 917.3 + floor(uTime * 2.5 + aRand * 9.0))) * hero * ik * lit;
 
     vec3 ink = mix(vec3(0.075, 0.075, 0.07), vec3(0.95, 0.93, 0.88), uDark);
     float kind = k < 0.5 ? kindOf(i) : kindOf(j);
@@ -77,6 +87,8 @@ const VS = /* glsl */`
     col = mix(col, vec3(0.37, 0.66, 0.19), scan);
     col = mix(col, vec3(1.0, 0.478, 0.239), tw);
     float al = mix(uAl[i] * shadeOf(i), uAl[j] * shadeOf(j), k);
+    col = mix(col, vec3(0.6, 0.58, 0.54), vibe * 0.85);
+    al *= 1.0 - vibe * (0.45 + 0.5 * leak * lt);
     al = clamp(al + scan * 0.6 + tw * 0.9, 0.0, 1.0) * (0.15 + 0.85 * ik);
     vC = vec4(col, al);
 
@@ -315,9 +327,10 @@ function streams(t0, count) {
   const from = new Float32Array(count * 3), to = new Float32Array(count * 3), off = new Float32Array(count), col = new Float32Array(count * 3);
   const C = ['#5FA831', '#FF7A3D', '#5B9DF0', '#3FB984', '#9CC92E'].map(h => new THREE.Color(h));
   for (let i = 0; i < count; i++) {
-    const lane = i % 5, a = lane / 5 * Math.PI * 2 + 0.4 + (Math.random() - 0.5) * 0.22, r = 2.3 + Math.random() * 0.5;
-    from.set([Math.cos(a) * r, -0.2 + (Math.random() - 0.5) * 0.5, Math.sin(a) * r * 0.6], i * 3);
-    let j, tries = 0; do { j = (Math.random() * N) | 0; tries++; } while ((t0.p[j * 3 + 1] < 0.3 || t0.k[j] !== 0) && tries < 30);
+    // knowledge only flows in from the learner's side (right)
+    const lane = i % 5;
+    from.set([1.9 + Math.random() * 0.9, -0.5 + lane * 0.38 + (Math.random() - 0.5) * 0.2, -0.3 + Math.random() * 0.9], i * 3);
+    let j, tries = 0; do { j = (Math.random() * N) | 0; tries++; } while ((t0.p[j * 3 + 1] < 0.1 || t0.p[j * 3] < 0.12 || t0.k[j] !== 0) && tries < 40);
     to.set([t0.p[j * 3], t0.p[j * 3 + 1], t0.p[j * 3 + 2]], i * 3);
     off[i] = lane * 0.2 + Math.random() * 0.2; col.set([C[lane].r, C[lane].g, C[lane].b], i * 3);
   }
@@ -335,7 +348,8 @@ async function main() {
 
   const tg = [];
   // 0 hero: looking up and to the side, taking an idea in
-  tg[0] = new Target(); addFigure(tg[0], sampler, N, [-0.2, -0.42, 0]);
+  // facing forward, so the split line runs down the middle of the face
+  tg[0] = new Target(); addFigure(tg[0], sampler, N, [-0.08, -0.04, 0]);
   // 1 story: looking down, with the unanswered question above
   tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.74), [0.36, 0.78, 0], 0.82, [-0.55, -0.45, 0], false);
   glyphPoints(tg[1], '?', N - tg[1].i, 1.6, [0.95, 1.05, 0.3], 1);
@@ -367,6 +381,7 @@ async function main() {
     uRot0: { value: new THREE.Matrix3() }, uM: { value: 0 }, uTime: { value: 0 }, uIntro: { value: RM ? 1 : 0 },
     uPix: { value: 1 }, uDark: { value: 0 }, uScanY: { value: 9 }, uScanOn: { value: 0 },
     uMouse: { value: new THREE.Vector2(999, 999) }, uMouseOn: { value: 0 }, uMouseR: { value: 1 }, uDrift: { value: 0 },
+    uSplit: { value: 99 }, uSplitW: { value: 0.05 },
   };
   const mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: U, transparent: true, depthWrite: false, depthTest: false });
   const pts = new THREE.Points(g, mat); pts.frustumCulled = false;
@@ -392,7 +407,7 @@ async function main() {
   const toW = (px, py, out) => out.set((px - W / 2) / ppw, -(py - H / 2) / ppw, 0);
   const el = { arch: $('.photo-arch'), story: $('.story figure'), app: $('.how .app'), radar: $('#radar'), paper: $('#paper'), close: $('#close') };
   const secs = ['#story', '#how', '#scores', '#certificate', '#who', '#close'].map(s => $(s));
-  const cert = $('#certificate');
+  const cert = $('#certificate'), divider = $('#divider'), tmp2 = vec();
 
   // pointer
   let mx = 0, my = 0, tx = 0, ty = 0, mOn = 0, mIn = 0;
@@ -438,7 +453,11 @@ async function main() {
     U.uScanOn.value = RM || t < 3 ? 0 : Math.sin(Math.min(1, sc * 1.4) * Math.PI);
     U.uScanY.value = 1.3 - Math.min(1, sc * 1.4) * 3.6;
     sU.uA0.value.copy(U.uA.value[0]); sU.uS0.value = U.uS.value[0];
-    sU.uOn.value = (RM ? 0.5 : Math.min(1, Math.max(0, (t - 2.2) / 1.2))) * (1 - Math.min(1, m * 3));
+    // hero split line, in world units; streams fade as the line covers the learner's half
+    if (divider) { const dr = divider.getBoundingClientRect(); toW(dr.left + dr.width / 2, 0, tmp2); U.uSplit.value = tmp2.x; }
+    U.uSplitW.value = 0.05 * U.uS.value[0];
+    const splitLocal = (U.uSplit.value - U.uA.value[0].x) / U.uS.value[0];
+    sU.uOn.value = (RM ? 0.5 : Math.min(1, Math.max(0, (t - 2.2) / 1.2))) * (1 - Math.min(1, m * 3)) * (1 - smooth(-0.2, 0.9, splitLocal));
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   };
