@@ -1,0 +1,6 @@
+# screenshots and checker cache
+shots/
+.taste-skill/
+# unused stand-in photos from the first draft
+assets/img/
+.DS_Store
