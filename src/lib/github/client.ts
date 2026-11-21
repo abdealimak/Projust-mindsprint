@@ -15,6 +15,7 @@ export class GithubNotConnectedError extends Error {
  * Never exposes the token to client components.
  */
 export async function getGithubClient(userId?: string): Promise<{ octokit: Octokit; isUserToken: boolean }> {
+  // 1. Try DB lookup
   if (userId) {
     try {
       const supabase = createClient();
@@ -32,11 +33,27 @@ export async function getGithubClient(userId?: string): Promise<{ octokit: Octok
         };
       }
     } catch (err) {
-      console.error('Error fetching github connection:', err);
+      console.warn('DB lookup for github connection skipped/failed:', err);
     }
   }
 
-  // Fallback to server token if available (for public repos)
+  // 2. Cookie fallback (ensures immediate access even before DB migration)
+  try {
+    const { cookies } = await import('next/headers');
+    const cookieStore = cookies();
+    const cookieToken = cookieStore.get('projust_gh_token')?.value;
+    if (cookieToken) {
+      const token = decryptToken(cookieToken);
+      return {
+        octokit: new Octokit({ auth: token }),
+        isUserToken: true,
+      };
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Fallback to server token if available (for public repos)
   if (process.env.GITHUB_SERVER_TOKEN) {
     return {
       octokit: new Octokit({ auth: process.env.GITHUB_SERVER_TOKEN }),
@@ -44,7 +61,7 @@ export async function getGithubClient(userId?: string): Promise<{ octokit: Octok
     };
   }
 
-  // Fallback unauthenticated Octokit (subject to low 60 req/hr rate limits)
+  // 4. Fallback unauthenticated Octokit (subject to low 60 req/hr rate limits)
   return {
     octokit: new Octokit(),
     isUserToken: false,

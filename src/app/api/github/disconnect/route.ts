@@ -22,5 +22,8 @@ export async function POST() {
     console.error('Error disconnecting github:', err);
   }
 
+  cookieStore.set('projust_gh_token', '', { path: '/', maxAge: 0 });
+  cookieStore.set('projust_gh_user', '', { path: '/', maxAge: 0 });
+
   return NextResponse.json({ ok: true });
 }

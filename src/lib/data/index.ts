@@ -35,6 +35,10 @@ export async function getProfile(): Promise<Profile> {
       try {
         const u = JSON.parse(userCookie);
         const username = u.email ? u.email.split('@')[0] : (u.name || 'developer').toLowerCase().replace(/\s+/g, '_');
+        const ghCookieUser = cookieStore.get('projust_gh_user')?.value;
+        const ghCookieToken = cookieStore.get('projust_gh_token')?.value;
+        const hasGithub = Boolean(ghCookieToken || ghCookieUser);
+
         return {
           id: u.uid || 'fb_user',
           username,
@@ -43,8 +47,8 @@ export async function getProfile(): Promise<Profile> {
           email: u.email || null,
           headline: 'Full-stack Developer',
           bio: 'Building and verifying software projects with Projust.',
-          github_username: null,
-          github_connected: false,
+          github_username: ghCookieUser || null,
+          github_connected: hasGithub,
           linkedin_url: null,
           created_at: new Date().toISOString(),
         };

@@ -9,6 +9,7 @@ export async function GET(request: Request) {
 
   const cookieStore = cookies();
   const userCookie = cookieStore.get('projust_user')?.value;
+  const mockCookie = cookieStore.get('projust_mock_user')?.value;
   let userId: string | undefined;
   if (userCookie) {
     try {
@@ -17,6 +18,9 @@ export async function GET(request: Request) {
     } catch {
       // ignore
     }
+  }
+  if (!userId && mockCookie) {
+    userId = mockCookie;
   }
 
   try {

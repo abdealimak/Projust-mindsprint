@@ -2,11 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Profile } from '@/types';
 import { Avatar } from '@/components/ui/Misc';
 import { useTheme } from '@/components/layout/ThemeProvider';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from '@/lib/firebase/auth';
 import {
   PersonIcon,
   RepoIcon,
@@ -22,7 +21,6 @@ export function UserMenu({ profile }: { profile: Profile }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
-  const router = useRouter();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -35,16 +33,13 @@ export function UserMenu({ profile }: { profile: Profile }) {
   }, []);
 
   const handleSignOut = async () => {
+    document.cookie = 'projust_mock_user=; path=/; max-age=0';
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      await signOut();
     } catch {
       // ignore
     }
-    // Clear developer mock cookies as well
-    document.cookie = 'projust_mock_user=; path=/; max-age=0';
-    router.push('/login');
-    router.refresh();
+    window.location.href = '/login';
   };
 
   return (

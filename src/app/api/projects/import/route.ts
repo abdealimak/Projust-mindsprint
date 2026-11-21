@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const mockCookie = cookieStore.get('projust_mock_user')?.value;
 
     let userId = 'demo_user';
-    const ghUsername: string | null = null;
+    let ghUsername: string | null = cookieStore.get('projust_gh_user')?.value || null;
 
     if (userCookie) {
       try {
@@ -65,6 +65,21 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient();
+
+    if (!ghUsername) {
+      try {
+        const { data: conn } = await supabase
+          .from('github_connections')
+          .select('github_username')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (conn?.github_username) {
+          ghUsername = conn.github_username;
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     // Check if project already exists for this user
     const { data: existing } = await supabase
