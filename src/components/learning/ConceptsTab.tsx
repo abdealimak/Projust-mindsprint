@@ -710,7 +710,7 @@ function ConceptDetail({
   const MAX_PREVIEW = 16;
   const preview = useMemo(() => {
     if (!ref || !file) return null;
-    const lines = file.content.split('\n');
+    const lines = (file.content || '').split('\n');
     const end = Math.min(ref.endLine, ref.startLine + MAX_PREVIEW - 1, lines.length);
     if (ref.startLine > lines.length) return null;
     return { snippet: lines.slice(ref.startLine - 1, end).join('\n'), cut: ref.endLine > end };
@@ -779,10 +779,10 @@ function ConceptDetail({
           title={concept.name}
           description="A short animated walkthrough of this concept and the lines it lives in."
           video={{
-            kicker: `${concept.category} · ${DIFFICULTY_LABEL[concept.difficulty]}`,
+            kicker: [concept.category, DIFFICULTY_LABEL[concept.difficulty]].filter(Boolean).join(' · '),
             title: concept.name,
             summary: concept.description,
-            code: preview && ref ? { path: ref.path, startLine: ref.startLine, text: preview.snippet } : null,
+            code: videoCode(concept.files, files),
             buildsOn: needs.map((c) => c.name),
             leadsTo: usedBy.map((c) => c.name),
           }}
@@ -854,4 +854,17 @@ function RelList({
       )}
     </div>
   );
+}
+
+/** Code for a concept's video: the first cited range whose file is indexed and in range. */
+function videoCode(refs: CodeRef[] | undefined, files?: { path: string; content: string }[]) {
+  for (const r of refs || []) {
+    const f = files?.find((x) => x.path === r.path);
+    if (!f?.content) continue;
+    const lines = f.content.split('\n');
+    if (!(r.startLine >= 1) || r.startLine > lines.length) continue;
+    const end = Math.min(Math.max(r.endLine || r.startLine, r.startLine), r.startLine + 15, lines.length);
+    return { path: r.path, startLine: r.startLine, text: lines.slice(r.startLine - 1, end).join('\n') };
+  }
+  return null;
 }

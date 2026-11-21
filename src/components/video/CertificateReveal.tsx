@@ -108,7 +108,7 @@ export const CertificateReveal: React.FC<CertificateRevealProps> = (p) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 26 }}>
           <div style={{ opacity: name, transform: `translateY(${(1 - name) * 14}px)` }}>
             <div style={{ fontSize: 15, color: V.muted }}>Awarded to</div>
-            <div style={{ fontFamily: V.serif, fontSize: 64, lineHeight: 1, marginTop: 6, letterSpacing: -1 }}>{p.recipientName}</div>
+            <div style={{ fontFamily: V.serif, fontSize: p.recipientName.length > 28 ? 48 : 64, lineHeight: 1, marginTop: 6, letterSpacing: -1 }}>{p.recipientName}</div>
             <div style={{ marginTop: 10, fontSize: 16, color: V.muted }}>
               for understanding the code in <span style={{ fontFamily: V.mono, color: V.ink }}>{p.repo}</span>
               {p.commitSha && (

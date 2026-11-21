@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { Volume2, VolumeX } from 'lucide-react';
 import { ConceptExplainer, explainerCues, explainerDuration, type ExplainerProps } from './ConceptExplainer';
 import { CertificateReveal, CERT_REVEAL_FRAMES, certificateCues, type CertificateRevealProps } from './CertificateReveal';
 import { V } from './theme';
+import { cleanCertificate, cleanExplainer } from './clean';
 
 /**
  * In-browser Remotion players (no server rendering). Loaded lazily by VideoButton so the
@@ -178,10 +179,12 @@ function Shell({ voice, setVoice, children }: { voice: boolean; setVoice: (v: bo
   );
 }
 
-export function ExplainerPlayer({ video }: { video: ExplainerProps }) {
+export function ExplainerPlayer({ video: raw }: { video: ExplainerProps }) {
+  const video = useMemo(() => cleanExplainer(raw), [raw]);
+  const cues = useMemo(() => explainerCues(video), [video]);
   const ref = useRef<PlayerRef>(null);
   const [voice, setVoice] = usePersistentVoice();
-  useNarration(ref, explainerCues(video), voice);
+  useNarration(ref, cues, voice);
   return (
     <Shell voice={voice} setVoice={setVoice}>
       <Player
@@ -205,10 +208,12 @@ export function ExplainerPlayer({ video }: { video: ExplainerProps }) {
   );
 }
 
-export function CertificatePlayer({ video }: { video: CertificateRevealProps }) {
+export function CertificatePlayer({ video: raw }: { video: CertificateRevealProps }) {
+  const video = useMemo(() => cleanCertificate(raw), [raw]);
+  const cues = useMemo(() => certificateCues(video), [video]);
   const ref = useRef<PlayerRef>(null);
   const [voice, setVoice] = usePersistentVoice();
-  useNarration(ref, certificateCues(video), voice);
+  useNarration(ref, cues, voice);
   return (
     <Shell voice={voice} setVoice={setVoice}>
       <Player

@@ -45,7 +45,9 @@ export function explainerNarration(p: ExplainerProps): Record<SceneKey, string> 
     intro: `${p.title}.`,
     idea: p.summary,
     code: p.code
-      ? `Here it is in ${fileName(p.code.path)}, lines ${p.code.startLine} to ${p.code.startLine + lines - 1}. Follow the highlight.`
+      ? lines === 1
+        ? `Here it is in ${fileName(p.code.path)}, line ${p.code.startLine}.`
+        : `Here it is in ${fileName(p.code.path)}, lines ${p.code.startLine} to ${p.code.startLine + lines - 1}. Follow the highlight.`
       : '',
     links: [b.length ? `It builds on ${list(b)}.` : 'It is a starting point.', l.length ? `And it leads to ${list(l)}.` : ''].join(' ').trim(),
     outro: `Check yourself. ${p.question || DEFAULT_Q}`,
@@ -202,7 +204,7 @@ const Intro: React.FC<ExplainerProps> = ({ kicker, title, repo }) => {
   const words = title.split(/\s+/);
   const underline = interpolate(frame, [18 + words.length * 3, 40 + words.length * 3], [0, 1], { ...clamp, easing: ease });
   const repoIn = useIn(30 + words.length * 3);
-  const size = title.length > 48 ? 72 : 88;
+  const size = title.length > 70 ? 60 : title.length > 48 ? 72 : 88;
   return (
     <AbsoluteFill style={{ padding: '0 96px', justifyContent: 'center' }}>
       <Eyebrow>{kicker}</Eyebrow>
@@ -291,7 +293,10 @@ const Code: React.FC<{ code: NonNullable<ExplainerProps['code']> }> = ({ code })
   const stepF = interpolate(frame, [walkStart, walkStart + lines.length * LINE_STEP], [0, lines.length], clamp);
   const active = Math.min(Math.floor(stepF), lines.length - 1);
   const band = spring({ frame: frame - walkStart - active * LINE_STEP, fps, config: { damping: 20, stiffness: 180 } });
-  const lineH = 34;
+  // Shrink the font for wide code so long lines fit the card (about 1000 px of text width)
+  const cols = Math.max(40, ...lines.map((l) => l.length));
+  const fontSize = Math.max(13, Math.min(20, Math.floor(1000 / (cols * 0.61))));
+  const lineH = Math.round(fontSize * 1.7);
   const bandY = 14 + (active - 1 + band) * lineH;
   // Camera: gentle push-in once the walk starts, following the highlight
   const push = interpolate(frame, [walkStart - 10, walkStart + 30], [0, 1], { ...clamp, easing: ease });
@@ -325,7 +330,7 @@ const Code: React.FC<{ code: NonNullable<ExplainerProps['code']> }> = ({ code })
             :{code.startLine}-{endLine}
           </span>
         </div>
-        <div style={{ position: 'relative', padding: '14px 0', fontFamily: V.mono, fontSize: 20 }}>
+        <div style={{ position: 'relative', padding: '14px 0', fontFamily: V.mono, fontSize }}>
           <div
             style={{
               position: 'absolute',
@@ -342,7 +347,7 @@ const Code: React.FC<{ code: NonNullable<ExplainerProps['code']> }> = ({ code })
             const shown = interpolate(frame, [20 + i * 4, 32 + i * 4], [0, 100], clamp);
             return (
               <div key={i} style={{ position: 'relative', display: 'flex', height: lineH, alignItems: 'center', whiteSpace: 'pre' }}>
-                <span style={{ width: 70, textAlign: 'right', paddingRight: 22, color: i === active && frame >= walkStart ? V.ink : '#A8A39A', flexShrink: 0 }}>
+                <span style={{ width: 70, textAlign: 'right', paddingRight: 22, fontSize: Math.min(18, fontSize), color: i === active && frame >= walkStart ? V.ink : '#A8A39A', flexShrink: 0 }}>
                   {code.startLine + i}
                 </span>
                 <span style={{ clipPath: `inset(0 ${100 - shown}% 0 0)`, opacity: frame < walkStart || i <= active ? 1 : 0.5 }}>

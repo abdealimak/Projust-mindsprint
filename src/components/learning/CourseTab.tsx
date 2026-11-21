@@ -488,10 +488,10 @@ function CourseReader({
                       video={{
                         kicker: `Lesson ${idx + 1} · ${current.minutes} min`,
                         title: current.title,
-                        summary: lessonSummary(current.body_md) || current.title,
+                        summary: lessonSummary(current.body_md || '') || current.title,
                         repo: repo ?? null,
                         code: lessonCode(current, files),
-                        question: current.check_questions[0] ?? null,
+                        question: current.check_questions?.[0] ?? null,
                       }}
                     />
                   </div>
@@ -591,12 +591,13 @@ function CourseReader({
 
 /** The first cited range of a lesson whose file is indexed, as text for the video. */
 function lessonCode(lesson: Lesson, files?: { path: string; content: string }[]) {
-  for (const r of lesson.code_refs) {
+  for (const r of lesson.code_refs || []) {
     const f = files?.find((x) => x.path === r.path);
-    if (!f) continue;
+    if (!f?.content) continue;
     const lines = f.content.split('\n');
-    if (r.startLine > lines.length) continue;
-    return { path: r.path, startLine: r.startLine, text: lines.slice(r.startLine - 1, Math.min(r.endLine, r.startLine + 15)).join('\n') };
+    if (!(r.startLine >= 1) || r.startLine > lines.length) continue;
+    const end = Math.min(Math.max(r.endLine || r.startLine, r.startLine), r.startLine + 15, lines.length);
+    return { path: r.path, startLine: r.startLine, text: lines.slice(r.startLine - 1, end).join('\n') };
   }
   return null;
 }
