@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/Misc';
 import type { CodeRef, Course, Lesson } from '@/types/learning';
 import { api, ApiError, usePoll, CodeRefChip, Markdown, StateCard, ErrorNote, Spinner, Bar } from './shared';
 import { loadErrorText } from './shared';
+import { VideoButton } from '@/components/video/VideoButton';
 
 type Level = 'beginner' | 'intermediate' | 'advanced';
 const LEVELS: { value: Level; label: string; hint: string }[] = [
@@ -23,9 +24,27 @@ interface Props {
   onGoToQuiz: () => void;
   onOpenFile: (ref: CodeRef) => void;
   onChanged?: () => void;
+  /** Indexed files, used to show a lesson's code in its explainer video. */
+  files?: { path: string; content: string }[];
+  repo?: string | null;
 }
 
-export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz, onOpenFile, onChanged }: Props) {
+/** Plain-text summary of a lesson for its video: first paragraph, markdown removed. */
+function lessonSummary(md: string): string {
+  const para = md
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .find((p) => p && !p.startsWith('#') && !p.startsWith('```') && !p.startsWith('|')) || '';
+  const text = para
+    .replace(/\[\[([^\]]+)\]\]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > 320 ? `${text.slice(0, 317).replace(/\s+\S*$/, '')}…` : text;
+}
+
+export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz, onOpenFile, onChanged, files, repo }: Props) {
   const [course, setCourse] = useState<Course | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -201,6 +220,8 @@ export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz
       regenerating={starting}
       actionError={actionError}
       onChanged={onChanged}
+      files={files}
+      repo={repo}
     />
   );
 }
@@ -216,7 +237,11 @@ function CourseReader({
   regenerating,
   actionError,
   onChanged,
+  files,
+  repo,
 }: {
+  files?: { path: string; content: string }[];
+  repo?: string | null;
   projectId: string;
   course: Course;
   setCourse: React.Dispatch<React.SetStateAction<Course | null | undefined>>;
@@ -454,6 +479,22 @@ function CourseReader({
                   <h2 id={`lesson-${current.id}`} className="pj-display text-[clamp(32px,3.4vw,46px)] mt-3 text-balance">
                     {current.title}
                   </h2>
+                  <div className="mt-4">
+                    <VideoButton
+                      kind="explainer"
+                      label="Watch lesson video"
+                      title={current.title}
+                      description="A short animated version of this lesson."
+                      video={{
+                        kicker: `Lesson ${idx + 1} · ${current.minutes} min`,
+                        title: current.title,
+                        summary: lessonSummary(current.body_md) || current.title,
+                        repo: repo ?? null,
+                        code: lessonCode(current, files),
+                        question: current.check_questions[0] ?? null,
+                      }}
+                    />
+                  </div>
 
                   {current.code_refs.length > 0 && (
                     <div className="mt-5">
@@ -546,4 +587,16 @@ function CourseReader({
       </div>
     </div>
   );
+}
+
+/** The first cited range of a lesson whose file is indexed, as text for the video. */
+function lessonCode(lesson: Lesson, files?: { path: string; content: string }[]) {
+  for (const r of lesson.code_refs) {
+    const f = files?.find((x) => x.path === r.path);
+    if (!f) continue;
+    const lines = f.content.split('\n');
+    if (r.startLine > lines.length) continue;
+    return { path: r.path, startLine: r.startLine, text: lines.slice(r.startLine - 1, Math.min(r.endLine, r.startLine + 15)).join('\n') };
+  }
+  return null;
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Misc';
 import { UNLOCK_AVERAGE, UNLOCK_FLOOR, type LearningCertificate } from '@/types/learning';
 import { CertificatePaper, fmtCertDate } from '@/app/cert/[code]/CertActions';
+import { VideoButton } from '@/components/video/VideoButton';
 import { api, StateCard } from './shared';
 import { loadErrorText } from './shared';
 
@@ -112,6 +113,15 @@ export function CertificateTab({ projectId, onGoToQuiz }: Props) {
             <ExternalLink className="w-4 h-4" aria-hidden />
             Open public page
           </Link>
+          <VideoButton
+            kind="certificate"
+            variant="solid"
+            label="Play certificate reveal"
+            title="Your certificate, animated"
+            description="A 10-second reveal you can screen-record and share."
+            className="w-full justify-center h-10"
+            video={certVideo(cert)}
+          />
           <Button onClick={copy} className="w-full">
             {copied ? <Check className="w-4 h-4 text-[#3F6212]" aria-hidden /> : <Copy className="w-4 h-4" aria-hidden />}
             <span aria-live="polite">{copied ? 'Link copied' : 'Copy link'}</span>
@@ -151,4 +161,17 @@ export function CertificateTab({ projectId, onGoToQuiz }: Props) {
       </aside>
     </div>
   );
+}
+
+function certVideo(cert: LearningCertificate) {
+  return {
+    code: cert.code,
+    recipientName: cert.recipient_name,
+    repo: cert.repo_full_name,
+    commitSha: cert.commit_sha,
+    level: cert.level,
+    scores: cert.scores,
+    overall: Math.round(cert.overall),
+    sample: cert.sample,
+  };
 }

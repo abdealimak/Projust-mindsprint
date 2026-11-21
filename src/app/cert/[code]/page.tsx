@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth/user';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { CertificatePaper, CopyLinkButton, VerifyForm } from './CertActions';
+import { VideoButton } from '@/components/video/VideoButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,24 @@ export default async function CertificatePage({ params }: { params: { code: stri
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-12 items-start">
             <div className="lg:col-span-7 w-full max-w-[760px]">
               <CertificatePaper cert={cert} verifyUrl={verifyUrl} tone="dark" />
+              <div className="mt-5">
+                <VideoButton
+                  kind="certificate"
+                  label="Play the reveal"
+                  title={`${cert.recipient_name}'s certificate`}
+                  description="A 10-second animated version of this certificate."
+                  video={{
+                    code: cert.code,
+                    recipientName: cert.recipient_name,
+                    repo: cert.repo_full_name,
+                    commitSha: cert.commit_sha,
+                    level: cert.level,
+                    scores: cert.scores,
+                    overall: Math.round(cert.overall),
+                    sample: cert.sample,
+                  }}
+                />
+              </div>
             </div>
 
             <aside className="lg:col-start-9 lg:col-span-4 flex flex-col gap-8 min-w-0">

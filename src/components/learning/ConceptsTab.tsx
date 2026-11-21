@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Misc';
 import type { CodeRef, Concept, ConceptsResponse } from '@/types/learning';
 import { api, usePoll, CodeRefChip, CodeBlock, StateCard, ErrorNote, GenerationProgress, Spinner } from './shared';
+import { VideoButton } from '@/components/video/VideoButton';
 import { loadErrorText } from './shared';
 
 /* Graph geometry (px). Nodes have a fixed size so nothing overlaps or gets clipped. */
@@ -772,6 +773,20 @@ function ConceptDetail({
       )}
 
       <div className="flex flex-wrap items-center gap-2 px-5 sm:px-6 py-3 border-t border-line bg-paper-2">
+        <VideoButton
+          kind="explainer"
+          label="Watch explainer"
+          title={concept.name}
+          description="A short animated walkthrough of this concept and the lines it lives in."
+          video={{
+            kicker: `${concept.category} · ${DIFFICULTY_LABEL[concept.difficulty]}`,
+            title: concept.name,
+            summary: concept.description,
+            code: preview && ref ? { path: ref.path, startLine: ref.startLine, text: preview.snippet } : null,
+            buildsOn: needs.map((c) => c.name),
+            leadsTo: usedBy.map((c) => c.name),
+          }}
+        />
         {onAsk && (
           <Button
             size="sm"

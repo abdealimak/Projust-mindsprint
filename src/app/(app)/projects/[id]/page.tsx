@@ -395,6 +395,8 @@ export default function ProjectWorkspacePage() {
               onGoToQuiz={() => setTab('quiz')}
               onOpenFile={openFile}
               onChanged={fetchLearning}
+              files={files}
+              repo={project?.repo_full_name}
             />
           )}
           {activeTab === 'quiz' && (
