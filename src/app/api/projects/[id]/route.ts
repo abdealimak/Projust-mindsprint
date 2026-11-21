@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getOwnedProject } from '@/lib/auth/user';
 import { getGithubClient } from '@/lib/github/client';
 import { runIngestionPipeline } from '@/lib/ingest/pipeline';
 
@@ -9,15 +10,9 @@ export async function POST(
 ) {
   const { id } = params;
   try {
-    const supabase = createClient();
-    const { data: project, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error || !project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    const { project, status } = await getOwnedProject<{ repo_full_name: string; user_id: string }>(id);
+    if (!project) {
+      return NextResponse.json({ error: status === 401 ? 'Sign in required' : 'Project not found' }, { status });
     }
 
     const [owner, repo] = project.repo_full_name.split('/');
@@ -46,8 +41,12 @@ export async function DELETE(
 ) {
   const { id } = params;
   try {
+    const owned = await getOwnedProject(id, 'id');
+    if (!owned.project) {
+      return NextResponse.json({ error: owned.status === 401 ? 'Sign in required' : 'Project not found' }, { status: owned.status });
+    }
     const supabase = createClient();
-    const { error } = await supabase.from('projects').delete().eq('id', id);
+    const { error } = await supabase.from('projects').delete().eq('id', id).eq('user_id', owned.userId!);
     if (error) throw error;
 
     return NextResponse.json({ ok: true });

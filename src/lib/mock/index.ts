@@ -22,7 +22,7 @@ export const mockProfile: Profile = {
   created_at: '2026-01-15T10:00:00Z',
 };
 
-export const mockProjects: Project[] = [
+const sampleProjects: Project[] = [
   {
     id: 'proj_1',
     user_id: 'usr_demo_4982a',
@@ -76,6 +76,13 @@ export const mockProjects: Project[] = [
     created_at: '2026-01-20T11:00:00Z',
   },
 ];
+
+/**
+ * Demo mode lists only the project that has full sample data behind it (files, concepts, course,
+ * quiz, certificate; see DEMO_PROJECT_ID in lib/brain/demo.ts). The others above have no detail
+ * data yet and would open to "Project not found".
+ */
+export const mockProjects: Project[] = sampleProjects.filter((p) => p.id === 'proj_1');
 
 export const mockScores: AspectScores = {
   concept_understanding: 88,

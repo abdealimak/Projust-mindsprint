@@ -8,25 +8,26 @@ interface BadgeProps {
   className?: string;
 }
 
+/** Landing-style chip. `accent` is the lime highlighter; `purple` maps to orange (no violet). */
 export function Badge({ children, variant = 'default', size = 'sm', className }: BadgeProps) {
   const variants = {
-    default: 'bg-canvas-subtle text-fg-muted border-border',
-    success: 'bg-[#238636]/15 text-[#3fb950] border-[#238636]/40',
-    attention: 'bg-[#d29922]/15 text-[#d29922] border-[#d29922]/40',
-    danger: 'bg-[#f85149]/15 text-[#f85149] border-[#f85149]/40',
-    accent: 'bg-[#2f81f7]/15 text-[#58a6ff] border-[#2f81f7]/40',
-    purple: 'bg-[#a371f7]/15 text-[#bc8cff] border-[#a371f7]/40',
+    default: 'bg-sheet text-ink-2 border-line',
+    success: 'bg-[#E6F5D0] text-[#3F6212] border-[#CFE6AE]',
+    attention: 'bg-[#FDF3DC] text-[#8A5A0B] border-[#F1DEAF]',
+    danger: 'bg-[#FDECEC] text-[#B4232C] border-[#F5CFCF]',
+    accent: 'bg-lime text-ink border-[#B9D84A]',
+    purple: 'bg-[#FFE6D9] text-[#963A12] border-[#FFCBB0]',
   };
 
   const sizes = {
-    sm: 'text-[11px] px-2 py-0.5',
-    md: 'text-[12px] px-2.5 py-1',
+    sm: 'text-[12px] px-2.5 py-0.5',
+    md: 'text-[13px] px-3 py-1',
   };
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 font-medium rounded-full border leading-tight select-none',
+        'inline-flex items-center gap-1.5 font-medium rounded-full border leading-tight select-none',
         variants[variant],
         sizes[size],
         className

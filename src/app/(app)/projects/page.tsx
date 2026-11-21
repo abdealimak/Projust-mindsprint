@@ -4,28 +4,35 @@ import { getProjects } from '@/lib/data';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { RepoIcon, PlusIcon, SearchIcon, RepoForkedIcon } from '@primer/octicons-react';
+import { RepoIcon, SearchIcon, RepoForkedIcon } from '@primer/octicons-react';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { EmptyState } from '@/components/ui/Misc';
 
 export default async function ProjectsPage() {
   const projects = await getProjects();
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-fg">Projects</h1>
-          <p className="text-[13px] text-fg-muted mt-0.5">
-            Repositories analyzed by Projust for architectural concepts, quizzes, and certificates.
-          </p>
-        </div>
-        <Link href="/projects/new">
-          <Button variant="primary" icon={<PlusIcon className="w-3.5 h-3.5" />}>
-            Import project
-          </Button>
-        </Link>
-      </div>
+    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1240px] mx-auto w-full space-y-6">
+      <PageHeader
+        className="mb-2"
+        eyebrow="Projects"
+        title="Your repositories,"
+        em="read line by line."
+        description="Projust checks how much of each repo you wrote, maps its concepts, and builds a course from it."
+      />
 
+      {projects.length === 0 ? (
+        <EmptyState
+          title="No projects yet"
+          description="Import a GitHub repository to get a summary, a tutor that knows your code and a course built from it."
+          action={
+            <Link href="/projects/new">
+              <Button variant="primary">Import a repository</Button>
+            </Link>
+          }
+        />
+      ) : (
+      <>
       {/* Filter and stats */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -99,6 +106,8 @@ export default async function ProjectsPage() {
           ))}
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 }

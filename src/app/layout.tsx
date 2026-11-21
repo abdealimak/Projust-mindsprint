@@ -13,34 +13,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" className="dark theme-dark" suppressHydrationWarning>
+    <html lang="en" data-theme="light" className="theme-light" suppressHydrationWarning>
       <head>
-        {/* Anti-flash inline script for theme */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var saved = localStorage.getItem('projust_theme');
-                  var theme = saved || 'dark';
-                  if (theme === 'system') {
-                    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                  }
-                  document.documentElement.setAttribute('data-theme', theme);
-                  if (theme === 'dark') {
-                    document.documentElement.classList.add('dark', 'theme-dark');
-                    document.documentElement.classList.remove('theme-light');
-                  } else {
-                    document.documentElement.classList.remove('dark', 'theme-dark');
-                    document.documentElement.classList.add('theme-light');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
+        {/* Same fonts as the landing page */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap"
         />
       </head>
-      <body className="bg-canvas text-fg antialiased">
+      <body className="bg-paper text-ink antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

@@ -2,93 +2,200 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Projust design tokens — same values as the landing page (index.html :root).
+ * Light theme only.
+ */
 :root {
-  --bg-canvas: #090d16;
-  --bg-subtle: #0f172a;
-  --bg-inset: #030712;
-  --border: #1e293b;
-  --border-subtle: #172033;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-hover: #7dd3fc;
-  --success: #10b981;
-  --success-hover: #34d399;
-  --danger: #f43f5e;
-  --attention: #f59e0b;
-}
+  --bg: #F3F1EC;
+  --paper: #FBFAF7;
+  --white: #FFFFFF;
+  --ink: #111110;
+  --ink-2: #2A2927;
+  --muted: #5E5B56;
+  --line: #E3DFD7;
+  --line-2: #D6D1C7;
+  --lime: #CDEB5A;
+  --olive: #4A5A1E;
+  --olive-d: #3A4716;
+  --orange: #FF7A3D;
+  --sky: #7FB8FF;
+  --mint: #5CCB9A;
+  --pass: #3F7F1F;
+  --red: #E5484D;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 18px 40px -18px rgba(30,25,15,.22), 0 2px 6px rgba(30,25,15,.06);
 
-[data-theme="light"],
-.theme-light {
-  --bg-canvas: #f8fafc;
-  --bg-subtle: #ffffff;
-  --bg-inset: #f1f5f9;
-  --border: #e2e8f0;
-  --border-subtle: #f1f5f9;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --accent: #0284c7;
-  --accent-hover: #0369a1;
-  --success: #059669;
-  --success-hover: #10b981;
-  --danger: #e11d48;
-  --attention: #d97706;
-}
+  /* Legacy names used by older components, mapped onto the landing palette */
+  --bg-canvas: var(--bg);
+  --bg-subtle: var(--white);
+  --bg-inset: var(--paper);
+  --border: var(--line);
+  --border-subtle: var(--line);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --accent: var(--olive);
+  --accent-hover: var(--olive-d);
+  --success: var(--pass);
+  --success-hover: #4F9A2A;
+  --danger: var(--red);
+  --attention: #B7791F;
 
-[data-theme="dark"],
-.theme-dark {
-  --bg-canvas: #090d16;
-  --bg-subtle: #0f172a;
-  --bg-inset: #030712;
-  --border: #1e293b;
-  --border-subtle: #172033;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-hover: #7dd3fc;
-  --success: #10b981;
-  --success-hover: #34d399;
-  --danger: #f43f5e;
-  --attention: #f59e0b;
+  color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background-color: var(--bg-canvas);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism helpers */
-.glass-panel {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08);
+:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
-/* Custom sleek scrollbar */
+::selection {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+@layer components {
+  /* Display heading: Instrument Serif, second clause in <em> muted grey (landing h2 style) */
+  .pj-display {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .pj-display em {
+    font-style: italic;
+    color: var(--muted);
+  }
+
+  /* Mono label with a short rule before it (landing .eyebrow) */
+  .pj-eyebrow {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pj-eyebrow::before {
+    content: "";
+    width: 24px;
+    height: 1px;
+    background: currentColor;
+  }
+
+  /* The one card look: white, 1px line border, large radius */
+  .pj-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+  }
+  .pj-card-hover {
+    transition: transform .35s var(--ease), box-shadow .35s var(--ease), border-color .2s;
+  }
+  .pj-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 50px -28px rgba(30,25,15,.35);
+  }
+
+  /* Pill buttons (landing .btn / .btn.ghost) */
+  .pj-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform .25s var(--ease), background .25s, box-shadow .25s;
+  }
+  .pj-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -10px rgba(0,0,0,.45);
+  }
+  .pj-btn:active {
+    transform: translateY(0) scale(.97);
+  }
+  .pj-btn-ghost {
+    background: var(--white);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .pj-btn-ghost:hover {
+    box-shadow: 0 10px 24px -12px rgba(0,0,0,.25);
+  }
+  .pj-btn-olive {
+    background: var(--olive);
+    border-color: var(--olive);
+    color: #F6F8EC;
+  }
+  .pj-btn-olive:hover {
+    background: var(--olive-d);
+  }
+
+  /* Small rounded chip (landing .chip) */
+  .pj-chip {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--white);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+/* Thin warm scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--line-2);
   border-radius: 9999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A8A39A;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

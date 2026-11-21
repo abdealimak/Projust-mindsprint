@@ -2,21 +2,20 @@ import {
   Profile,
   Project,
   AspectScores,
-  CourseProgress,
   ActivityItem,
-  Certificate,
   CommonProjectCourse,
 } from '@/types';
 import {
   mockProfile,
   mockProjects,
   mockScores,
-  mockCourses,
   mockActivity,
-  mockCertificates,
   mockCommonProjects,
 } from '@/lib/mock';
-import { cookies } from 'next/headers';
+import { getCurrentUser } from '@/lib/auth/user';
+import type { LearningCertificate, LearningSummary } from '@/types/learning';
+import { certificateByCode, learningSummaries, listCertificates } from '@/lib/brain/service';
+import { demoHasCert, demoSummaries, sampleCertificate, SAMPLE_CERT_CODE } from '@/lib/brain/demo';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -27,54 +26,36 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function getProfile(): Promise<Profile> {
   try {
-    const cookieStore = cookies();
-    const userCookie = cookieStore.get('projust_user')?.value;
-    const mockCookie = cookieStore.get('projust_mock_user')?.value;
+    const user = await getCurrentUser();
+    if (user?.demo) {
+      const slug = user.uid.slice('demo:'.length);
+      return { ...mockProfile, id: user.uid, username: slug, full_name: user.name || slug };
+    }
+    if (user) {
+      const username = user.email ? user.email.split('@')[0] : (user.name || 'developer').toLowerCase().replace(/\s+/g, '_');
 
-    if (userCookie) {
+      // Prefer a saved profile row if one exists
       try {
-        const u = JSON.parse(userCookie);
-        const username = u.email ? u.email.split('@')[0] : (u.name || 'developer').toLowerCase().replace(/\s+/g, '_');
-        return {
-          id: u.uid || 'fb_user',
-          username,
-          full_name: u.name || username,
-          avatar_url: u.picture || null,
-          email: u.email || null,
-          headline: 'Full-stack Developer',
-          bio: 'Building and verifying software projects with Projust.',
-          github_username: null,
-          github_connected: false,
-          linkedin_url: null,
-          created_at: new Date().toISOString(),
-        };
+        const supabase = createClient();
+        const { data: row } = await supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle();
+        if (row) return row as Profile;
       } catch {
-        // fallback
+        // fall through to the token-derived profile
       }
-    }
 
-    if (mockCookie) {
       return {
-        ...mockProfile,
-        username: mockCookie,
-        full_name: mockCookie === 'alexchen' ? 'Alex Chen' : mockCookie,
+        id: user.uid,
+        username,
+        full_name: user.name || username,
+        avatar_url: user.picture,
+        email: user.email,
+        headline: null,
+        bio: null,
+        github_username: null,
+        github_connected: false,
+        linkedin_url: null,
+        created_at: new Date().toISOString(),
       };
-    }
-
-    // Try Supabase if available
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        if (profile) return profile as Profile;
-      }
-    } catch {
-      // ignore
     }
   } catch {
     // ignore
@@ -85,29 +66,17 @@ export async function getProfile(): Promise<Profile> {
 
 export async function getProjects(): Promise<Project[]> {
   try {
-    const cookieStore = cookies();
-    const userCookie = cookieStore.get('projust_user')?.value;
-    const mockCookie = cookieStore.get('projust_mock_user')?.value;
-    let userId: string | null = null;
-
-    if (userCookie) {
-      try {
-        userId = JSON.parse(userCookie).uid;
-      } catch {
-        // ignore
-      }
-    } else if (mockCookie) {
-      userId = mockCookie;
-    }
+    const user = await getCurrentUser();
+    // Sample data is only for demo mode; a real account sees its own (possibly empty) list.
+    if (!user || user.demo) return mockProjects;
+    const userId = user.uid;
 
     const supabase = createClient();
-    let query = supabase.from('projects').select('*').order('created_at', { ascending: false });
-
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { data: projects } = await query;
+    const { data: projects } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
     if (projects && projects.length > 0) {
       return projects.map((p) => ({
@@ -124,6 +93,7 @@ export async function getProjects(): Promise<Project[]> {
         created_at: p.created_at,
       }));
     }
+    return [];
   } catch {
     // fallback
   }
@@ -135,21 +105,110 @@ export async function getScores(): Promise<AspectScores> {
   return mockScores;
 }
 
-export async function getCourses(): Promise<CourseProgress[]> {
-  return mockCourses;
+/** Projects that have a course (any status). Dashboard uses the count. */
+export async function getCourses(): Promise<LearningSummary[]> {
+  return (await getLearningSummaries()).filter((s) => s.course);
+}
+
+/** One learning summary per project: concepts, course progress, latest quiz attempt, certificate. */
+export async function getLearningSummaries(): Promise<LearningSummary[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  try {
+    if (user.demo) return demoSummaries(user.uid, mockProjects);
+    return await learningSummaries(user.uid);
+  } catch (err) {
+    console.error('getLearningSummaries failed:', err);
+    return [];
+  }
 }
 
 export async function getActivity(): Promise<ActivityItem[]> {
   return mockActivity;
 }
 
-export async function getCertificates(): Promise<Certificate[]> {
-  return mockCertificates;
+export async function getCertificates(): Promise<LearningCertificate[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  try {
+    if (user.demo) return demoHasCert(user.uid) ? [sampleCertificate()] : [];
+    return await listCertificates(user.uid);
+  } catch (err) {
+    console.error('getCertificates failed:', err);
+    return [];
+  }
 }
 
-export async function getCertificateByCode(code: string): Promise<Certificate | null> {
-  const match = mockCertificates.find((c) => c.cert_code.toLowerCase() === code.toLowerCase());
-  return match || mockCertificates[0];
+/** Public verification. Only real codes from the database, plus the one labelled sample. */
+export async function getCertificateByCode(code: string): Promise<LearningCertificate | null> {
+  const c = code.trim().toUpperCase();
+  if (c === SAMPLE_CERT_CODE) return sampleCertificate();
+  try {
+    return await certificateByCode(c);
+  } catch (err) {
+    console.error('getCertificateByCode failed:', err);
+    return null;
+  }
+}
+
+export interface PublicProfile {
+  profile: {
+    username: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    headline: string | null;
+    bio: string | null;
+    github_username: string | null;
+    linkedin_url: string | null;
+  };
+  certificates: LearningCertificate[];
+  sample: boolean;
+}
+
+/** Public profile page data. `alexchen` is the labelled sample profile. */
+export async function getPublicProfile(username: string): Promise<PublicProfile | null> {
+  const u = username.trim().toLowerCase();
+  if (u === 'alexchen') {
+    return {
+      profile: {
+        username: 'alexchen',
+        full_name: 'Alex Chen',
+        avatar_url: null,
+        headline: mockProfile.headline,
+        bio: mockProfile.bio,
+        github_username: mockProfile.github_username,
+        linkedin_url: null,
+      },
+      certificates: [sampleCertificate()],
+      sample: true,
+    };
+  }
+  if (!/^[a-z0-9_-]{3,30}$/.test(u)) return null;
+  try {
+    const supabase = createClient();
+    const { data: row } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url, headline, bio, github_username, linkedin_url, public_profile')
+      .eq('username', u)
+      .maybeSingle();
+    if (!row || row.public_profile === false) return null;
+    return {
+      profile: {
+        username: row.username,
+        full_name: row.full_name,
+        avatar_url: row.avatar_url,
+        headline: row.headline,
+        bio: row.bio,
+        github_username: row.github_username,
+        linkedin_url: row.linkedin_url,
+      },
+      certificates: await listCertificates(row.id),
+      sample: false,
+    };
+  } catch (err) {
+    console.error('getPublicProfile failed:', err);
+    return null;
+  }
 }
 
 export async function getCommonProjects(): Promise<CommonProjectCourse[]> {

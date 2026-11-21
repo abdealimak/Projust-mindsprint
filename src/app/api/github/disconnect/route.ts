@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserId } from '@/lib/auth/user';
 
 export async function POST() {
-  const cookieStore = cookies();
-  const userCookie = cookieStore.get('projust_user')?.value;
-  let userId = 'anonymous';
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(userCookie);
-      userId = parsed.uid || 'anonymous';
-    } catch {
-      // ignore
-    }
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
   }
 
   try {

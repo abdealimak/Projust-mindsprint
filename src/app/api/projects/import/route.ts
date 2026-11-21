@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getGithubClient } from '@/lib/github/client';
 import { runIngestionPipeline } from '@/lib/ingest/pipeline';
+import { getCurrentUserId } from '@/lib/auth/user';
 
 const ImportSchema = z.object({
   repoFullName: z.string().optional(),
@@ -46,23 +46,11 @@ export async function POST(request: Request) {
     }
 
     // Get current user id
-    const cookieStore = cookies();
-    const userCookie = cookieStore.get('projust_user')?.value;
-    const mockCookie = cookieStore.get('projust_mock_user')?.value;
-
-    let userId = 'demo_user';
-    const ghUsername: string | null = null;
-
-    if (userCookie) {
-      try {
-        const u = JSON.parse(userCookie);
-        userId = u.uid || 'demo_user';
-      } catch {
-        // ignore
-      }
-    } else if (mockCookie) {
-      userId = mockCookie;
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
+    const ghUsername: string | null = null;
 
     const supabase = createClient();
 

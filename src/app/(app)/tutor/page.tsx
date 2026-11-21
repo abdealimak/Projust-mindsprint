@@ -6,11 +6,11 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
-  CommentDiscussionIcon,
   PaperAirplaneIcon,
   RepoIcon,
   ShieldLockIcon,
 } from '@primer/octicons-react';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 function TutorContent() {
   const searchParams = useSearchParams();
@@ -53,26 +53,22 @@ function TutorContent() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-fg flex items-center gap-2">
-            <CommentDiscussionIcon className="w-5 h-5 text-accent" />
-            AI Project Tutor
-          </h1>
-          <p className="text-[13px] text-fg-muted mt-0.5">
-            Ask anything about your uploaded repository. Answers are grounded directly in your code.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1040px] mx-auto w-full space-y-4">
+      <PageHeader
+        className="mb-2"
+        eyebrow="Tutor"
+        title="Ask about your code."
+        em="Get the exact lines back."
+        description="Answers are grounded in your repository and cite the files they come from."
+        action={
+          <div className="flex items-center gap-2">
           <Badge variant="accent" size="md">
             <RepoIcon className="w-3.5 h-3.5 mr-1" />
             {initialProject}
           </Badge>
         </div>
-      </div>
+        }
+      />
 
       {/* Chat conversation area */}
       <Card className="flex flex-col h-[560px]">

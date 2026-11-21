@@ -1,12 +1,15 @@
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
+  type AuthProvider,
   GithubAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import { auth } from './config';
+import { getFirebaseAuth, isFirebaseConfigured } from './config';
 
 const googleProvider = new GoogleAuthProvider();
 const githubProvider = new GithubAuthProvider();
@@ -14,16 +17,65 @@ const githubProvider = new GithubAuthProvider();
 githubProvider.addScope('read:user');
 githubProvider.addScope('public_repo');
 
-export async function signInWithGoogle() {
-  const result = await signInWithPopup(auth, googleProvider);
+/**
+ * Popup sign-in. If the browser blocks the popup, fall back to a full-page redirect;
+ * the login page picks the result up with completeRedirectSignIn() when it loads again.
+ * Returns null when a redirect was started (the page is navigating away).
+ */
+async function signInWith(provider: AuthProvider): Promise<User | null> {
+  const auth = getFirebaseAuth();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    await syncSessionCookie(result.user);
+    return result.user;
+  } catch (err) {
+    if (authErrorCode(err) === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+export const signInWithGoogle = () => signInWith(googleProvider);
+export const signInWithGitHub = () => signInWith(githubProvider);
+
+/** Finish a redirect sign-in started by signInWith(). Returns the user, or null if there was none. */
+export async function completeRedirectSignIn(): Promise<User | null> {
+  if (!isFirebaseConfigured) return null;
+  const result = await getRedirectResult(getFirebaseAuth());
+  if (!result) return null;
   await syncSessionCookie(result.user);
   return result.user;
 }
 
-export async function signInWithGitHub() {
-  const result = await signInWithPopup(auth, githubProvider);
-  await syncSessionCookie(result.user);
-  return result.user;
+function authErrorCode(err: unknown): string | null {
+  return typeof err === 'object' && err && 'code' in err && typeof err.code === 'string' ? err.code : null;
+}
+
+/** Turn a Firebase auth error into a sentence a person can act on. */
+export function authErrorMessage(err: unknown, providerName: string): string | null {
+  switch (authErrorCode(err)) {
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+    case 'auth/user-cancelled':
+      return null; // they closed it on purpose; no error needed
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the sign-in window. Allow popups for this site and try again.';
+    case 'auth/operation-not-allowed':
+      return `${providerName} sign-in is not turned on for this Firebase project yet (Firebase console → Authentication → Sign-in method).`;
+    case 'auth/unauthorized-domain':
+      return `This address (${typeof window !== 'undefined' ? window.location.host : 'this domain'}) is not an authorised domain in Firebase (Authentication → Settings → Authorized domains).`;
+    case 'auth/account-exists-with-different-credential':
+      return 'You already signed up with a different provider using this email. Use that one instead.';
+    case 'auth/network-request-failed':
+      return 'Could not reach the sign-in service. Check your connection and try again.';
+    case 'auth/invalid-api-key':
+    case 'auth/configuration-not-found':
+      return 'Firebase is not set up correctly (check the NEXT_PUBLIC_FIREBASE_* keys in .env).';
+  }
+  if (err instanceof Error && !err.message.startsWith('Firebase:')) return err.message;
+  return `${providerName} sign-in failed. Please try again.`;
 }
 
 export async function signOut() {
@@ -33,7 +85,7 @@ export async function signOut() {
   } catch {
     // ignore
   }
-  await firebaseSignOut(auth);
+  if (isFirebaseConfigured) await firebaseSignOut(getFirebaseAuth());
 }
 
 /**
@@ -42,11 +94,17 @@ export async function signOut() {
  */
 async function syncSessionCookie(user: User) {
   const idToken = await user.getIdToken();
-  await fetch('/api/auth/session', {
+  const res = await fetch('/api/auth/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken }),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    // Don't leave a half-signed-in Firebase state behind
+    await firebaseSignOut(getFirebaseAuth()).catch(() => {});
+    throw new Error(body.error || 'Sign-in could not be verified');
+  }
 }
 
 /**
@@ -54,7 +112,11 @@ async function syncSessionCookie(user: User) {
  * Call this once from a client-side provider.
  */
 export function onAuthChange(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, async (user) => {
+  if (!isFirebaseConfigured) {
+    callback(null);
+    return () => {};
+  }
+  return onAuthStateChanged(getFirebaseAuth(), async (user) => {
     if (user) {
       // Refresh the session cookie whenever the token refreshes
       await syncSessionCookie(user);
@@ -63,5 +125,5 @@ export function onAuthChange(callback: (user: User | null) => void) {
   });
 }
 
-export { auth };
+export { getFirebaseAuth, isFirebaseConfigured };
 export type { User };

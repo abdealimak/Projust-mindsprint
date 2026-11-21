@@ -1,72 +1,41 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
+/**
+ * Projust is light-only, matching the landing page. The provider stays so existing
+ * `useTheme()` callers keep working, but the theme is always "light".
+ */
 type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeContextType {
   theme: Theme;
-  resolvedTheme: 'light' | 'dark';
-  setTheme: (theme: Theme) => void;
+  resolvedTheme: Theme;
+  setTheme: (theme: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'dark',
-  resolvedTheme: 'dark',
+  theme: 'light',
+  resolvedTheme: 'light',
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark');
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
-
   useEffect(() => {
-    // Read persisted theme from localStorage or default to dark
-    const saved = localStorage.getItem('projust_theme') as Theme | null;
-    const initialTheme: Theme = saved && ['light', 'dark', 'system'].includes(saved) ? saved : 'dark';
-    setThemeState(initialTheme);
+    // Clean up any dark-mode state left over from older builds.
+    const root = document.documentElement;
+    root.classList.remove('dark', 'theme-dark');
+    root.classList.add('theme-light');
+    root.setAttribute('data-theme', 'light');
+    try {
+      localStorage.removeItem('projust_theme');
+    } catch {
+      // storage may be blocked
+    }
   }, []);
 
-  useEffect(() => {
-    function applyTheme() {
-      let active: 'light' | 'dark' = 'dark';
-
-      if (theme === 'system') {
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        active = systemPrefersDark ? 'dark' : 'light';
-      } else {
-        active = theme;
-      }
-
-      setResolvedTheme(active);
-      document.documentElement.setAttribute('data-theme', active);
-      if (active === 'dark') {
-        document.documentElement.classList.add('dark', 'theme-dark');
-        document.documentElement.classList.remove('theme-light');
-      } else {
-        document.documentElement.classList.remove('dark', 'theme-dark');
-        document.documentElement.classList.add('theme-light');
-      }
-    }
-
-    applyTheme();
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => applyTheme();
-      mediaQuery.addEventListener('change', handler);
-      return () => mediaQuery.removeEventListener('change', handler);
-    }
-  }, [theme]);
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    localStorage.setItem('projust_theme', newTheme);
-    document.cookie = `projust_theme=${newTheme}; path=/; max-age=31536000`;
-  };
-
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme: 'light', resolvedTheme: 'light', setTheme: () => {} }}>
       {children}
     </ThemeContext.Provider>
   );

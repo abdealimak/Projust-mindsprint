@@ -1,134 +1,351 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  SearchIcon,
-  RepoIcon,
-  BookIcon,
-  PersonIcon,
-  XIcon,
-} from '@primer/octicons-react';
+  Search,
+  X,
+  FolderGit2,
+  LayoutDashboard,
+  FolderOpen,
+  Plus,
+  GraduationCap,
+  Award,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SearchPaletteProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface ProjectHit {
+  id: string;
+  repo_full_name: string;
+  status: string;
+  summary: string | null;
+}
+
+interface Item {
+  key: string;
+  group: 'Projects' | 'Go to';
+  title: string;
+  meta?: string;
+  href: string;
+  icon: LucideIcon;
+  mono?: boolean;
+}
+
+const SHORTCUTS: Omit<Item, 'group' | 'key'>[] = [
+  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Projects', href: '/projects', icon: FolderOpen },
+  { title: 'Import a repository', href: '/projects/new', icon: Plus, meta: 'Import repo' },
+  { title: 'Courses', href: '/courses', icon: GraduationCap },
+  { title: 'Certificates', href: '/certificates', icon: Award },
+  { title: 'Settings', href: '/settings', icon: Settings },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  ready: 'Ready',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  analyzing: 'Analyzing',
+  importing: 'Importing',
+  failed: 'Failed',
+};
+
+type FetchState = 'idle' | 'loading' | 'done' | 'error';
+
 export function SearchPalette({ isOpen, onClose }: SearchPaletteProps) {
-  const [query, setQuery] = useState('');
   const router = useRouter();
+  const listId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [projects, setProjects] = useState<ProjectHit[]>([]);
+  const [sample, setSample] = useState(false);
+  const [fetchState, setFetchState] = useState<FetchState>('idle');
+  const [active, setActive] = useState(0);
+
+  // Reset on open, remember and restore focus.
+  useEffect(() => {
+    if (!isOpen) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    setQuery('');
+    setDebounced('');
+    setActive(0);
+    const t = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(t);
+      restoreRef.current?.focus?.();
+    };
+  }, [isOpen]);
+
+  // Debounce input by 200ms.
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(query.trim()), 200);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  // Fetch the user's projects for the debounced query.
+  useEffect(() => {
+    if (!isOpen) return;
+    const ctrl = new AbortController();
+    setFetchState('loading');
+    fetch(`/api/search?q=${encodeURIComponent(debounced)}`, { signal: ctrl.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const body = (await res.json()) as { projects: ProjectHit[]; sample: boolean };
+        setProjects(body.projects || []);
+        setSample(!!body.sample);
+        setFetchState('done');
+      })
+      .catch((err: unknown) => {
+        if ((err as { name?: string })?.name === 'AbortError') return;
+        setProjects([]);
+        setFetchState('error');
+      });
+    return () => ctrl.abort();
+  }, [debounced, isOpen]);
+
+  const items = useMemo<Item[]>(() => {
+    const needle = query.trim().toLowerCase();
+    const projectItems: Item[] = projects.map((p) => ({
+      key: `p:${p.id}`,
+      group: 'Projects',
+      title: p.repo_full_name,
+      meta: [STATUS_LABEL[p.status] || p.status, p.summary].filter(Boolean).join(' — '),
+      href: `/projects/${p.id}`,
+      icon: FolderGit2,
+      mono: true,
+    }));
+    const navItems: Item[] = SHORTCUTS.filter(
+      (s) =>
+        !needle ||
+        s.title.toLowerCase().includes(needle) ||
+        (s.meta || '').toLowerCase().includes(needle)
+    ).map((s) => ({ ...s, key: `n:${s.href}`, group: 'Go to' }));
+    return [...projectItems, ...navItems];
+  }, [projects, query]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
+    setActive((a) => (items.length === 0 ? 0 : Math.min(a, items.length - 1)));
+  }, [items.length]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [debounced]);
+
+  // Keep the active option in view.
+  useEffect(() => {
+    const el = document.getElementById(`${listId}-opt-${active}`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [active, listId]);
+
+  const select = useCallback(
+    (item: Item | undefined) => {
+      if (!item) return;
+      onClose();
+      router.push(item.href);
+    },
+    [onClose, router]
+  );
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
     }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (items.length) setActive((a) => (a + 1) % items.length);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (items.length) setActive((a) => (a - 1 + items.length) % items.length);
+      return;
+    }
+    if (e.key === 'Enter' && e.target === inputRef.current) {
+      e.preventDefault();
+      select(items[active]);
+      return;
+    }
+    if (e.key === 'Tab') {
+      // Focus trap: cycle between the focusable controls inside the dialog.
+      const nodes = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'input, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      );
+      if (!nodes || nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
-  const mockResults = [
-    { type: 'project', title: 'alexchen-dev/shop-api', href: '/projects', meta: 'High-throughput Node.js checkout' },
-    { type: 'project', title: 'alexchen-dev/todo-app', href: '/projects', meta: 'Realtime task manager' },
-    { type: 'course', title: 'Payments & Idempotency in High-Concurrence', href: '/courses', meta: 'shop-api course' },
-    { type: 'person', title: 'Alex Chen (@alexchen)', href: '/u/alexchen', meta: 'Verified profile' },
-    { type: 'nav', title: 'Certificates repository', href: '/certificates', meta: 'View all verified credentials' },
-    { type: 'nav', title: 'AI Tutor Chat', href: '/tutor', meta: 'Ask questions grounded in your repo' },
-  ];
+  const trimmed = query.trim();
+  const searching = fetchState === 'loading' || trimmed !== debounced;
+  const hasProjects = projects.length > 0;
+  const noResults = items.length === 0 && !searching;
 
-  const filtered = query.trim()
-    ? mockResults.filter(
-        (r) =>
-          r.title.toLowerCase().includes(query.toLowerCase()) ||
-          r.meta.toLowerCase().includes(query.toLowerCase())
-      )
-    : mockResults;
-
-  const handleSelect = (href: string) => {
-    router.push(href);
-    onClose();
+  let index = -1;
+  const renderGroup = (group: Item['group'], heading: React.ReactNode) => {
+    const groupItems = items.filter((i) => i.group === group);
+    if (groupItems.length === 0) return null;
+    return (
+      <div role="group" aria-label={group} className="py-1.5">
+        <div className="px-3 pt-1 pb-1.5 text-[12px] text-muted flex items-center gap-2">{heading}</div>
+        {groupItems.map((item) => {
+          index += 1;
+          const i = index;
+          const Icon = item.icon;
+          const isActive = i === active;
+          return (
+            <div
+              key={item.key}
+              id={`${listId}-opt-${i}`}
+              role="option"
+              aria-selected={isActive}
+              onMouseMove={() => setActive(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => select(item)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-s cursor-pointer',
+                isActive ? 'bg-[#EEF2DF]' : 'hover:bg-paper'
+              )}
+            >
+              <span
+                className={cn(
+                  'w-8 h-8 rounded-[10px] grid place-items-center shrink-0 border',
+                  isActive ? 'bg-olive border-olive text-[#F6F8EC]' : 'bg-sheet border-line text-muted'
+                )}
+              >
+                <Icon className="w-4 h-4" strokeWidth={1.8} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cn('block truncate text-[14px] text-ink', item.mono && 'font-mono text-[13px]')}>
+                  {item.title}
+                </span>
+                {item.meta && <span className="block truncate text-[12.5px] text-muted">{item.meta}</span>}
+              </span>
+              {isActive && <span className="hidden sm:inline text-[12px] text-muted shrink-0">Open</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh] bg-ink/30"
+      onMouseDown={onClose}
+    >
       <div
-        className="w-full max-w-xl bg-canvas-subtle border border-border rounded-[8px] shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={onKeyDown}
+        className="w-full max-w-[600px] rounded-m border border-line bg-sheet shadow-lift overflow-hidden"
       >
-        {/* Search Input bar */}
-        <div className="flex items-center px-4 py-3 border-b border-border gap-2.5 bg-canvas">
-          <SearchIcon className="text-fg-muted w-4 h-4 shrink-0" />
+        <div className="flex items-center gap-3 px-4 h-14 border-b border-line">
+          <Search className="w-[18px] h-[18px] text-muted shrink-0" strokeWidth={1.8} aria-hidden />
           <input
+            ref={inputRef}
             type="text"
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search or jump to projects, courses, people…"
-            className="w-full bg-transparent text-[14px] text-fg placeholder:text-fg-muted focus:outline-none"
+            placeholder="Search your projects or jump to a page"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-activedescendant={items.length ? `${listId}-opt-${active}` : undefined}
+            aria-autocomplete="list"
+            className="flex-1 min-w-0 bg-transparent text-[15px] text-ink placeholder:text-muted focus:outline-none"
+            style={{ outline: 'none' }}
           />
           <button
+            type="button"
             onClick={onClose}
-            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-canvas-subtle"
+            aria-label="Close search"
+            className="w-8 h-8 grid place-items-center rounded-full text-muted hover:text-ink hover:bg-paper shrink-0"
           >
-            <XIcon className="w-4 h-4" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Results List */}
-        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-          {filtered.length === 0 ? (
-            <div className="p-6 text-center text-fg-muted text-[13px]">
-              No results found for &ldquo;{query}&rdquo;
+        <div id={listId} role="listbox" aria-label="Results" className="max-h-[min(420px,60vh)] overflow-y-auto px-2 py-1">
+          {renderGroup(
+            'Projects',
+            <>
+              <span>{trimmed ? 'Your projects' : 'Recent projects'}</span>
+              {sample && (
+                <span className="px-1.5 py-px rounded-full border border-line text-[11px]">Sample data</span>
+              )}
+            </>
+          )}
+
+          {!hasProjects && fetchState === 'done' && !trimmed && (
+            <div className="mx-1 my-2 rounded-s bg-paper px-4 py-3 text-[13.5px] text-muted">
+              No projects yet. Import a repository to search it here.
             </div>
-          ) : (
-            filtered.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleSelect(item.href)}
-                className="flex items-center justify-between px-3 py-2 rounded-[6px] hover:bg-canvas-inset hover:border-border cursor-pointer transition-colors group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-fg-muted group-hover:text-accent">
-                    {item.type === 'project' && <RepoIcon className="w-4 h-4" />}
-                    {item.type === 'course' && <BookIcon className="w-4 h-4" />}
-                    {item.type === 'person' && <PersonIcon className="w-4 h-4" />}
-                    {item.type === 'nav' && <SearchIcon className="w-4 h-4" />}
-                  </span>
-                  <div>
-                    <div className="text-[13px] font-medium text-fg group-hover:text-accent">
-                      {item.title}
-                    </div>
-                    <div className="text-[11px] text-fg-muted">{item.meta}</div>
-                  </div>
-                </div>
-                <span className="text-[11px] text-fg-muted opacity-0 group-hover:opacity-100 font-mono">
-                  Jump to &rarr;
-                </span>
-              </div>
-            ))
+          )}
+          {fetchState === 'error' && (
+            <div className="mx-1 my-2 rounded-s bg-paper px-4 py-3 text-[13.5px] text-muted">
+              Could not search projects. Page shortcuts still work.
+            </div>
+          )}
+
+          {renderGroup('Go to', <span>Go to</span>)}
+
+          {noResults && (
+            <div className="px-4 py-10 text-center">
+              <p className="text-[15px] text-ink">No matches for &ldquo;{trimmed}&rdquo;</p>
+              <p className="mt-1 text-[13.5px] text-muted">Search looks at repository names, like owner/repo.</p>
+            </div>
+          )}
+          {searching && items.length === 0 && (
+            <div className="px-4 py-10 text-center text-[13.5px] text-muted">Searching…</div>
           )}
         </div>
 
-        {/* Footer shortcuts */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-canvas text-[11px] text-fg-muted">
-          <div className="flex items-center gap-3">
-            <span>
-              <kbd className="px-1.5 py-0.5 rounded border border-border bg-canvas-subtle">↑</kbd>{' '}
-              <kbd className="px-1.5 py-0.5 rounded border border-border bg-canvas-subtle">↓</kbd> to navigate
-            </span>
-            <span>
-              <kbd className="px-1.5 py-0.5 rounded border border-border bg-canvas-subtle">esc</kbd> to close
-            </span>
-          </div>
-          <span>Projust Command Palette</span>
+        <div className="hidden sm:flex items-center gap-4 px-4 h-10 border-t border-line bg-paper-2 text-[12px] text-muted">
+          <span className="flex items-center gap-1.5">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> move
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Enter</Kbd> open
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Esc</Kbd> close
+          </span>
         </div>
       </div>
     </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="min-w-[20px] h-5 px-1.5 inline-grid place-items-center rounded-[6px] border border-line bg-sheet font-mono text-[11px] text-ink-2">
+      {children}
+    </kbd>
   );
 }

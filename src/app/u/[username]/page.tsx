@@ -1,170 +1,158 @@
 import React from 'react';
 import Link from 'next/link';
-import { getProfile, getScores, getCertificates } from '@/lib/data';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { ArrowUpRight, ExternalLink } from 'lucide-react';
+import { MarkGithubIcon } from '@primer/octicons-react';
+import { getPublicProfile } from '@/lib/data';
+import { getCurrentUser } from '@/lib/auth/user';
+import { ASPECTS, ASPECT_LABELS, type AspectScores, type LearningCertificate } from '@/types/learning';
 import { Avatar } from '@/components/ui/Misc';
-import { Badge } from '@/components/ui/Badge';
-import { Card, CardHeader } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { AspectRadar } from '@/components/charts/AspectRadar';
-import {
-  MarkGithubIcon,
-  ShieldCheckIcon,
-  RepoIcon,
-  CheckCircleFillIcon,
-} from '@primer/octicons-react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
-export default async function PublicProfilePage({
-  params,
-}: {
-  params: { username: string };
-}) {
-  const [profile, scores, certificates] = await Promise.all([
-    getProfile(),
-    getScores(),
-    getCertificates(),
-  ]);
+export const dynamic = 'force-dynamic';
 
-  const overall = Math.round(
-    (scores.concept_understanding +
-      scores.code_comprehension +
-      scores.debugging +
-      scores.architecture_design +
-      scores.security_best_practices +
-      scores.ai_collaboration) / 6
-  );
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Best score per skill across all certificates. Null when there are none. */
+function bestScores(certs: LearningCertificate[]): AspectScores | null {
+  if (certs.length === 0) return null;
+  const out = {} as AspectScores;
+  for (const a of ASPECTS) out[a] = Math.max(...certs.map((c) => c.scores[a] ?? 0));
+  return out;
+}
+
+export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
+  const data = await getPublicProfile(params.username);
+  if (!data) return { title: 'Profile not found — Projust' };
+  const name = data.profile.full_name || data.profile.username;
+  return { title: `${name} — Projust`, description: data.profile.headline || `${name}'s verified Projust certificates.` };
+}
+
+export default async function PublicProfilePage({ params }: { params: { username: string } }) {
+  const [data, user] = await Promise.all([getPublicProfile(params.username), getCurrentUser()]);
+  if (!data) notFound();
+
+  const { profile, certificates, sample } = data;
+  const name = profile.full_name || profile.username;
+  const best = bestScores(certificates);
+  const certs = [...certificates].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   return (
-    <div className="min-h-screen flex flex-col bg-canvas text-fg">
-      <Header profile={profile} />
+    <div className="min-h-screen flex flex-col bg-paper text-ink">
+      <Header signedIn={!!user} />
 
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-8 space-y-6">
-        {/* Profile Header card */}
-        <div className="p-6 rounded-[8px] border border-border bg-canvas-subtle">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <Avatar
-                src={profile.avatar_url}
-                fallback={params.username[0]?.toUpperCase()}
-                size="xl"
-              />
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl font-bold tracking-tight text-fg">
-                    {profile.full_name || params.username}
-                  </h1>
-                  <span className="text-[14px] text-fg-muted font-mono">
-                    @{params.username}
-                  </span>
-                </div>
-                <p className="text-[13px] text-fg-muted mt-1 max-w-xl">
-                  {profile.headline || 'Software Engineer · Verified builder'}
-                </p>
+      <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-10 py-10 lg:py-14">
+        {sample && (
+          <div
+            role="note"
+            className="mb-8 rounded-m border border-[#F1DEAF] bg-[#FDF3DC] px-5 py-4 text-[14.5px] text-[#6B4708]"
+          >
+            <strong className="font-semibold">Sample profile — demo data.</strong> This page shows what a public
+            Projust profile looks like. The person and certificates are not real.
+          </div>
+        )}
 
-                {/* Trust Badges */}
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge variant="accent">
-                    <MarkGithubIcon className="w-3.5 h-3.5 mr-1" /> GitHub Verified
-                  </Badge>
-                  <Badge variant="success">
-                    <ShieldCheckIcon className="w-3.5 h-3.5 mr-1" /> 86%+ Ownership
-                  </Badge>
-                  {profile.linkedin_url && (
-                    <Badge variant="default">LinkedIn Connected</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Overall Projust Score badge */}
-            <div className="text-center p-3 rounded-[6px] border border-border bg-canvas sm:min-w-[130px]">
-              <span className="text-3xl font-mono font-extrabold text-accent">
-                {overall}
-              </span>
-              <p className="text-[10px] text-fg-muted uppercase tracking-wider font-semibold mt-0.5">
-                Projust Index
-              </p>
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 mb-8 border-b border-line">
+          <div className="flex items-start gap-5 min-w-0">
+            <Avatar src={profile.avatar_url} alt={name} fallback={name} size="xl" />
+            <div className="min-w-0">
+              <h1 className="pj-display text-[clamp(38px,5vw,60px)] break-words">{name}</h1>
+              <p className="mt-2 font-mono text-[13px] text-muted">@{profile.username}</p>
+              {profile.headline && <p className="mt-3 text-[16.5px] text-ink-2 max-w-[56ch]">{profile.headline}</p>}
             </div>
           </div>
-
-          {profile.bio && (
-            <p className="mt-4 pt-4 border-t border-border text-[13px] text-fg leading-relaxed">
-              {profile.bio}
-            </p>
+          {(profile.github_username || profile.linkedin_url) && (
+            <div className="flex flex-wrap gap-2 shrink-0">
+              {profile.github_username && (
+                <a
+                  href={`https://github.com/${encodeURIComponent(profile.github_username)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pj-btn pj-btn-ghost"
+                >
+                  <MarkGithubIcon size={16} aria-hidden />
+                  GitHub
+                </a>
+              )}
+              {profile.linkedin_url && /^https:\/\//.test(profile.linkedin_url) && (
+                <a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer" className="pj-btn pj-btn-ghost">
+                  <ExternalLink className="w-4 h-4" aria-hidden />
+                  LinkedIn
+                </a>
+              )}
+            </div>
           )}
-        </div>
+        </header>
 
-        {/* 2-Column: Radar + Verified Projects */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Skill Radar */}
-          <Card className="p-4 flex flex-col justify-between">
-            <CardHeader title="Combined Skill Radar" />
-            <div className="my-2">
-              <AspectRadar scores={scores} height={260} />
-            </div>
-            <div className="text-[11px] text-fg-muted text-center">
-              Evaluated across {certificates.length} repositories with automated quiz & viva verifications.
-            </div>
-          </Card>
+        {profile.bio && <p className="mb-10 text-[16px] text-ink-2 leading-relaxed max-w-[68ch]">{profile.bio}</p>}
 
-          {/* Verified Projects Cards */}
-          <Card>
-            <CardHeader title="Verified Projects & Certificates" />
-            <div className="divide-y divide-border/50">
-              {certificates.map((cert) => (
-                <div key={cert.id} className="p-4 hover:bg-canvas-inset transition-colors space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-fg text-[14px] flex items-center gap-1.5">
-                      <RepoIcon className="w-4 h-4 text-fg-muted" />
-                      {cert.project_name}
-                    </span>
-                    <Badge variant={cert.level === 'Interview-verified' ? 'purple' : 'success'}>
-                      {cert.level}
-                    </Badge>
-                  </div>
-                  <p className="text-[12px] font-mono text-fg-muted">{cert.repo_full_name}</p>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[12px] text-fg-muted">
-                      Score: <strong className="text-fg">{cert.overall_score}/100</strong>
-                    </span>
-                    <Link href={`/cert/${cert.cert_code}`}>
-                      <Button size="sm" variant="default">
-                        View Certificate &rarr;
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* Mastered Concepts Tag Cloud */}
-        <Card className="p-4">
-          <CardHeader title="Concepts Mastered" />
-          <div className="flex flex-wrap gap-2 pt-3">
-            {[
-              { name: 'Idempotency Keys', cat: 'Architecture' },
-              { name: 'Webhook Signatures', cat: 'Security' },
-              { name: 'Sliding-Window Rate Limiting', cat: 'Distributed Systems' },
-              { name: 'Cookie-Based Session Auth', cat: 'Security' },
-              { name: 'Optimistic UI Updates', cat: 'Frontend' },
-              { name: 'WebSocket Heartbeats', cat: 'Networking' },
-              { name: 'Partition Consumer Groups', cat: 'Performance' },
-              { name: 'AI Discernment & Prompt Auditing', cat: 'AI Collaboration' },
-            ].map((concept, idx) => (
-              <span
-                key={idx}
-                className="px-2.5 py-1 rounded-full border border-border bg-canvas text-[12px] text-fg flex items-center gap-1"
-              >
-                <CheckCircleFillIcon className="w-3 h-3 text-success" />
-                <span>{concept.name}</span>
-                <span className="text-[10px] text-fg-muted font-mono ml-1">({concept.cat})</span>
-              </span>
-            ))}
+        {certs.length === 0 ? (
+          <div className="pj-card p-10 text-center">
+            <h2 className="pj-display text-[32px]">No certificates yet.</h2>
+            <p className="mt-3 text-[15px] text-muted max-w-[48ch] mx-auto">
+              {name} has not earned a Projust certificate. Certificates appear here once a quiz on one of their
+              repositories is passed.
+            </p>
           </div>
-        </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <section aria-labelledby="certs-heading" className="lg:col-span-7">
+              <h2 id="certs-heading" className="text-[15px] font-semibold">
+                Verified certificates
+                <span className="ml-2 font-normal text-muted">{certs.length}</span>
+              </h2>
+              <ul className="mt-4 space-y-3">
+                {certs.map((c) => (
+                  <li key={c.code}>
+                    <Link
+                      href={`/cert/${c.code}`}
+                      className="group pj-card pj-card-hover p-5 flex items-center gap-5"
+                    >
+                      <div className="shrink-0 w-[68px] text-center">
+                        <p className="pj-display text-[40px]">{Math.round(c.overall)}</p>
+                        <p className="text-[11.5px] text-muted">overall</p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[14px] text-ink truncate">{c.repo_full_name}</p>
+                        <p className="mt-1 text-[13px] text-muted">
+                          {c.level}, {c.concepts.length} concepts, updated {fmtDate(c.updated_at)}
+                        </p>
+                        <p className="mt-1.5 font-mono text-[12px] text-muted">{c.code}</p>
+                      </div>
+                      <ArrowUpRight
+                        className="w-4 h-4 text-muted shrink-0 transition-transform duration-300 ease-land group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                        aria-hidden
+                      />
+                      <span className="sr-only">Open certificate {c.code}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {best && (
+              <section aria-labelledby="skills-heading" className="lg:col-span-5 pj-card p-5">
+                <h2 id="skills-heading" className="text-[15px] font-semibold">
+                  Best score per skill
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">Highest across {certs.length === 1 ? 'one certificate' : `${certs.length} certificates`}.</p>
+                <AspectRadar scores={best} height={240} />
+                <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 text-[13.5px]">
+                  {ASPECTS.map((a) => (
+                    <div key={a} className="flex items-center justify-between gap-2">
+                      <dt className="text-muted">{ASPECT_LABELS[a]}</dt>
+                      <dd className="font-mono">{Math.round(best[a])}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
+          </div>
+        )}
       </main>
 
       <Footer />

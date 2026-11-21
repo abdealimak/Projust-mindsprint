@@ -5,12 +5,10 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
+/** The one card look from the landing page: white sheet, 1px warm line, 20px radius. */
 export function Card({ className, children, ...props }: CardProps) {
   return (
-    <div
-      className={cn('rounded-[6px] border border-border bg-canvas-subtle overflow-hidden', className)}
-      {...props}
-    >
+    <div className={cn('rounded-m border border-line bg-sheet overflow-hidden', className)} {...props}>
       {children}
     </div>
   );
@@ -30,12 +28,12 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex items-center justify-between px-3.5 py-2.5 border-b border-border text-[13px] font-semibold text-fg',
+        'flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line text-[14.5px] font-semibold text-ink',
         className
       )}
     >
-      <div className="flex items-center gap-2">{title || children}</div>
-      {action && <div>{action}</div>}
+      <div className="flex items-center gap-2 min-w-0">{title || children}</div>
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -47,5 +45,5 @@ export function CardContent({
   className?: string;
   children: React.ReactNode;
 }) {
-  return <div className={cn('p-3.5', className)}>{children}</div>;
+  return <div className={cn('p-5', className)}>{children}</div>;
 }

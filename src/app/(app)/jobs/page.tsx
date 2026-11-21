@@ -1,90 +1,114 @@
 import React from 'react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { BriefcaseIcon, LocationIcon, ClockIcon } from '@primer/octicons-react';
+import Link from 'next/link';
+import { Page, PageHeader } from '@/components/layout/PageHeader';
+
+/**
+ * Jobs is planned, not built. This page explains the idea and shows clearly marked
+ * example listings. Nothing here is a real company or a real opening.
+ */
+const EXAMPLES = [
+  {
+    title: 'Backend engineer, payments',
+    company: 'Example fintech startup',
+    where: 'Remote',
+    needs: 'Certificate on a payments or checkout repo, Security 70 or higher',
+    why: 'Wants people who can explain idempotency keys and webhook signature checks in their own code.',
+  },
+  {
+    title: 'Full-stack engineer, realtime',
+    company: 'Example collaboration tool',
+    where: 'Hybrid',
+    needs: 'Certificate on a WebSocket repo, Architecture 65 or higher',
+    why: 'Wants people who can walk through reconnect handling and message ordering in a project they built.',
+  },
+];
+
+const STEPS = [
+  {
+    title: 'Companies post a role',
+    body: 'Each role names the skills it needs and the minimum scores, instead of a keyword list.',
+  },
+  {
+    title: 'You apply with a certificate',
+    body: 'Your verified certificate link stands in for the résumé screen. It shows the repo, six scores and version history.',
+  },
+  {
+    title: 'They check it themselves',
+    body: 'Anyone can open the certificate page and confirm it was issued by Projust.',
+  },
+];
 
 export default function JobsPage() {
-  const mockJobs = [
-    {
-      title: 'Backend Engineer (Payments & Infrastructure)',
-      company: 'PayFlow Tech',
-      location: 'Remote (Global)',
-      type: 'Full-time',
-      experience: '0-2 years (Early Career)',
-      verifiedCourse: 'Shop API & Idempotent Payments Course',
-      description:
-        'PayFlow is hiring engineers who understand webhook replay attacks, idempotency key guarantees, and database transaction boundaries.',
-    },
-    {
-      title: 'Full Stack Engineer (Realtime Collaboration)',
-      company: 'SyncLayer',
-      location: 'San Francisco, CA / Remote',
-      type: 'Full-time',
-      experience: 'Fresh Graduate / Junior',
-      verifiedCourse: 'Realtime WebSockets & Concurrency Course',
-      description:
-        'Looking for honest builders who can explain their state management, websocket heartbeats, and optimistic UI conflict resolution.',
-    },
-  ];
-
   return (
-    <div className="space-y-6">
-      <div className="pb-4 border-b border-border">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Verified Job Openings</h1>
-        <p className="text-[13px] text-fg-muted mt-0.5">
-          Companies hiring developers based on verified project comprehension rather than resume buzzwords.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Planned"
+        title="Jobs that check"
+        em="understanding."
+        description="Job listings are not live yet. When they are, companies will list roles that require a verified Projust certificate instead of a keyword-matched résumé."
+        action={
+          <Link href="/certificates" className="pj-btn pj-btn-ghost">
+            View my certificates
+          </Link>
+        }
+      />
 
-      <div className="space-y-4">
-        {mockJobs.map((job, idx) => (
-          <Card key={idx} className="p-4 hover:border-accent/40 transition-colors">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-[16px] font-semibold text-fg">{job.title}</h3>
-                  <Badge variant="accent">{job.company}</Badge>
-                </div>
+      <section aria-labelledby="how-heading">
+        <h3 id="how-heading" className="text-[15px] font-semibold">
+          How it will work
+        </h3>
+        <ol className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {STEPS.map((s, i) => (
+            <li key={s.title} className="pj-card p-5">
+              <span className="font-mono text-[12px] text-muted">Step {i + 1}</span>
+              <h4 className="mt-2 text-[16px] font-semibold">{s.title}</h4>
+              <p className="mt-1.5 text-[14px] text-muted leading-relaxed">{s.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-                <div className="flex items-center gap-4 text-[12px] text-fg-muted flex-wrap">
-                  <span className="flex items-center gap-1">
-                    <LocationIcon className="w-3.5 h-3.5" />
-                    {job.location}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <BriefcaseIcon className="w-3.5 h-3.5" />
-                    {job.type}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <ClockIcon className="w-3.5 h-3.5" />
-                    {job.experience}
-                  </span>
-                </div>
+      <section aria-labelledby="examples-heading" className="mt-12">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 id="examples-heading" className="text-[15px] font-semibold">
+            What a listing could look like
+          </h3>
+          <span className="text-[13px] text-muted">Examples only. Not real companies or openings.</span>
+        </div>
 
-                <p className="text-[13px] text-fg-muted leading-relaxed max-w-3xl">
-                  {job.description}
-                </p>
-
-                <div className="pt-1">
-                  <span className="text-[11px] font-mono text-accent">
-                    Required verification: {job.verifiedCourse}
-                  </span>
-                </div>
+        <ul className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {EXAMPLES.map((job) => (
+            <li
+              key={job.title}
+              className="relative rounded-m border border-dashed border-line-2 bg-paper-2 p-6"
+            >
+              <span className="absolute top-4 right-4 font-mono text-[11px] tracking-[.08em] uppercase px-2 py-0.5 rounded-full border border-line-2 text-muted bg-sheet">
+                Example listing
+              </span>
+              <p className="text-[13px] text-muted pr-28">{job.company}</p>
+              <h4 className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">{job.title}</h4>
+              <p className="mt-1 text-[13.5px] text-muted">{job.where}</p>
+              <p className="mt-4 text-[14px] text-ink-2 leading-relaxed">{job.why}</p>
+              <div className="mt-4 rounded-s border border-line bg-sheet px-4 py-3 text-[13.5px]">
+                <span className="text-muted">Requires: </span>
+                {job.needs}
               </div>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-              <div className="shrink-0 flex items-center sm:flex-col gap-2">
-                <Button variant="primary" size="md">
-                  Apply with Projust
-                </Button>
-                <Button variant="default" size="sm">
-                  View Briefing
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
+      <div className="mt-12 pj-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-[16px] font-semibold">Get ready before listings open</h3>
+          <p className="mt-1 text-[14px] text-muted max-w-[56ch]">
+            Import a project you built and earn a certificate. It is the one thing a listing will ask for.
+          </p>
+        </div>
+        <Link href="/projects/new" className="pj-btn shrink-0">
+          Import a repository
+        </Link>
       </div>
-    </div>
+    </Page>
   );
 }

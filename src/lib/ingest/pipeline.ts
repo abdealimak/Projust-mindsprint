@@ -1,12 +1,11 @@
 import zlib from 'zlib';
 import tar from 'tar-stream';
-import { generateObject } from 'ai';
+import { generateJSON } from '@/lib/brain/llm';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@/lib/supabase/server';
 import { shouldKeepFile, detectLanguage, redactSecrets } from './filterFiles';
 import { calculatePriority, prioritizeFiles, ScoredFile } from './prioritize';
 import { checkOwnership } from './ownership';
-import { llmFastModel } from '@/lib/ai/provider';
 import { SUMMARY_SYSTEM_PROMPT } from '@/lib/ai/prompts/summary';
 import { ProjectSummarySchema, ProjectSummary } from '@/lib/ai/schemas';
 
@@ -218,11 +217,12 @@ export async function runIngestionPipeline({
 
       const promptText = `Analyze this codebase:\n\nFILE TREE:\n${fileTreeText}\n\nKEY FILE CONTENTS:\n${sampleContents}`;
 
-      const { object } = await generateObject({
-        model: llmFastModel,
+      const object = await generateJSON({
+        schema: ProjectSummarySchema,
         system: SUMMARY_SYSTEM_PROMPT,
         prompt: promptText,
-        schema: ProjectSummarySchema,
+        fast: true,
+        maxOutputTokens: 3000,
       });
 
       // Validate that cited entryPoints and notableFiles exist

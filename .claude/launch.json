@@ -1,12 +1,40 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
     {
       "name": "remote-site",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "4321", "--directory", "/Users/somyajeet/Projust-mindsprint-remote"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4321",
+        "--directory",
+        "/Users/somyajeet/Projust-mindsprint-remote"
+      ],
       "port": 4321
+    },
+    {
+      "name": "demo-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "next",
+        "start",
+        "-p",
+        "3002"
+      ],
+      "env": {
+        "NEXT_DIST_DIR": ".next-demo"
+      },
+      "port": 3002
     }
   ]
 }

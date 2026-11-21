@@ -2,6 +2,41 @@
 
 **Projust** verifies that developers actually understand the projects they built (especially AI-assisted codebases) through repository ingestion, personalized courses with quizzes, and dynamic recruiter-verifiable credentials.
 
+## Run it locally
+
+```bash
+npm install
+cp .env.example .env   # then fill in the keys you have
+npm run dev            # or `npm run demo` for a production build on http://localhost:3000
+```
+
+Run **one** server at a time from this folder: two `next dev` processes share `.next` and break each other
+("Cannot find module ./vendor-chunks/..."). If that happens, stop them all, `rm -rf .next`, and start one.
+
+One site, one origin:
+
+- `/`: the landing page (static: `public/landing.html`, `public/assets/story.js`, `public/assets/models/head.glb`,
+  copied from the `landing-page` branch). Its "Sign in" / "Import a repo" buttons go to `/login`.
+- `/login`: sign in with GitHub, Google, email, or **"look around with demo data"** (no keys needed; set
+  `ALLOW_DEMO_MODE=false` to hide it). Signed-in users are forwarded to `/dashboard`.
+- Demo walkthrough: dashboard → Projects → `alexchen-dev/shop-api` → Concepts → Course → Quiz → Certificate.
+  Demo progress is kept in server memory, so restarting the server resets it.
+- `/cert/PJ-2026-A7X9K2`: the sample certificate the landing page links to.
+
+### Live run with Claude (real repo → course → certificate)
+
+Demo mode uses canned sample data. For a live run, every AI step (repo summary, tutor, concept map,
+course, quiz questions, grading) goes to Claude (`claude-opus-5-5`) through the Anthropic SDK:
+
+1. Put your key in `.env`: `ANTHROPIC_API_KEY=...` (restart the server after).
+2. Create the tables: run `supabase/migrations/003_firebase_and_learning.sql` once in the
+   Supabase SQL editor.
+3. Turn on GitHub and Google under Firebase console → Authentication → Sign-in method, and keep
+   `localhost` in Authorized domains.
+4. Sign in with GitHub or Google (not demo), import a **public** repo, then Concepts → Course → Quiz.
+
+If a Claude call fails, the app falls back to the `LLM_*` backends when they are set.
+
 ---
 
 ## 1. Feature 1: Repository Ingestion, Indexing, and Codebase Grounded AI Tutor
@@ -63,7 +98,7 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ## 3. Database Migrations
 
-Run `supabase/migrations/002_feature1.sql` in your Supabase SQL editor:
+Run `supabase/migrations/002_feature1.sql`, then `003_firebase_and_learning.sql`, in your Supabase SQL editor:
 - `github_connections`: Encrypted AES-256-GCM repository access tokens.
 - `projects`: Stores repo metadata, ownership percentages, status, and structured LLM `summary` JSON.
 - `project_files`: Ingested source files with language, line counts, priority score, and generated `tsv` tsvector index for full-text search.
@@ -86,7 +121,7 @@ Run `supabase/migrations/002_feature1.sql` in your Supabase SQL editor:
 
 Run the automated Feature 1 test suite (crypto roundtrip, file filtering, secret redaction, priority scoring, citation parsing & bounds validation):
 ```bash
-node --experimental-strip-types tests/feature1.test.ts
+npm test   # Feature 1 suite + learning/quiz/demo suite
 ```
 
 Run production build check:

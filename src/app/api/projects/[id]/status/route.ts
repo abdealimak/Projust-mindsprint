@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser, getOwnedProject } from '@/lib/auth/user';
+import { isDemoProject, demoProjectStatus } from '@/lib/brain/demo';
 
 export async function GET(
   request: Request,
@@ -7,15 +8,18 @@ export async function GET(
 ) {
   const { id } = params;
   try {
-    const supabase = createClient();
-    const { data: project, error } = await supabase
-      .from('projects')
-      .select('id, repo_full_name, status, status_detail, file_count, summary, ownership_pct, ownership_status')
-      .eq('id', id)
-      .single();
-
-    if (error || !project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    const user = await getCurrentUser();
+    if (user?.demo) {
+      return isDemoProject(id)
+        ? NextResponse.json(demoProjectStatus())
+        : NextResponse.json({ error: 'Sample data is available for alexchen-dev/shop-api only.' }, { status: 404 });
+    }
+    const { project, status } = await getOwnedProject(
+      id,
+      'id, repo_full_name, repo_url, default_branch, commit_sha, primary_language, status, status_detail, file_count, summary, ownership_pct, ownership_status'
+    );
+    if (!project) {
+      return NextResponse.json({ error: status === 401 ? 'Sign in required' : 'Project not found' }, { status });
     }
 
     return NextResponse.json(project);

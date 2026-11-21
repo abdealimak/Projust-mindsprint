@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { Octokit } from '@octokit/rest';
 import { encryptToken } from '@/lib/crypto';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserId } from '@/lib/auth/user';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -60,15 +61,9 @@ export async function GET(request: Request) {
     const encryptedToken = encryptToken(accessToken);
 
     // Identify user
-    const userCookie = cookieStore.get('projust_user')?.value;
-    let userId = 'anonymous';
-    if (userCookie) {
-      try {
-        const parsed = JSON.parse(userCookie);
-        userId = parsed.uid || 'anonymous';
-      } catch {
-        // ignore
-      }
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.redirect(`${origin}/login?next=/projects/new`);
     }
 
     // Persist into github_connections

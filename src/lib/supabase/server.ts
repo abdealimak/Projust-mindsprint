@@ -4,7 +4,11 @@ import { cookies } from 'next/headers';
 export function createClient() {
   const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  // Users sign in with Firebase, so Supabase never has a user session to apply RLS to.
+  // Server code therefore uses the service-role key and must always filter by user_id itself.
+  // This file imports next/headers, so it can never be bundled into the browser.
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {

@@ -1,23 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getGithubClient, GithubNotConnectedError } from '@/lib/github/client';
+import { getCurrentUserId } from '@/lib/auth/user';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1', 10);
   const q = (searchParams.get('q') || '').toLowerCase().trim();
 
-  const cookieStore = cookies();
-  const userCookie = cookieStore.get('projust_user')?.value;
-  let userId: string | undefined;
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(userCookie);
-      userId = parsed.uid;
-    } catch {
-      // ignore
-    }
-  }
+  const userId = (await getCurrentUserId()) ?? undefined;
 
   try {
     const { octokit, isUserToken } = await getGithubClient(userId);

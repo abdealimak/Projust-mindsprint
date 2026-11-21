@@ -1,80 +1,63 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import {
+  SESSION_COOKIE,
+  DEMO_COOKIE,
+  SESSION_MAX_AGE_S,
+  verifyFirebaseIdToken,
+  createSessionToken,
+} from '@/lib/auth/session';
 
 /**
- * POST /api/auth/session — Set the Firebase session cookie
+ * POST /api/auth/session — exchange a Firebase ID token for a Projust session cookie.
  * Body: { idToken: string }
  */
 export async function POST(request: Request) {
+  let idToken: unknown;
   try {
-    const { idToken } = await request.json();
+    ({ idToken } = await request.json());
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+  if (!idToken || typeof idToken !== 'string' || idToken.length > 8192) {
+    return NextResponse.json({ error: 'Missing idToken' }, { status: 400 });
+  }
 
-    if (!idToken || typeof idToken !== 'string') {
-      return NextResponse.json({ error: 'Missing idToken' }, { status: 400 });
-    }
+  let user;
+  try {
+    user = await verifyFirebaseIdToken(idToken);
+  } catch (err) {
+    console.warn('[auth] Rejected Firebase ID token:', err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: 'Sign-in could not be verified. Please try again.' }, { status: 401 });
+  }
 
-    // Decode the Firebase ID token (it's a standard JWT) to extract user info
-    // We store the full token so server components can decode it
-    const payload = decodeJwtPayload(idToken);
-    if (!payload || !payload.sub) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
-    }
-
-    const cookieStore = cookies();
-
-    // Store the ID token as an httpOnly cookie
-    cookieStore.set('projust_session', idToken, {
+  try {
+    const session = await createSessionToken(user);
+    const store = cookies();
+    store.set(SESSION_COOKIE, session, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      // Secure whenever served over https; plain http://localhost (incl. `npm run demo`) still works
+      secure: new URL(request.url).protocol === 'https:',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: SESSION_MAX_AGE_S,
     });
+    // A real sign-in replaces demo mode, and the old unsigned user-info cookie is retired.
+    store.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 });
+    store.set('projust_user', '', { path: '/', maxAge: 0 });
 
-    // Also store a lightweight user info cookie (readable by middleware)
-    const userInfo = JSON.stringify({
-      uid: payload.sub,
-      email: payload.email || null,
-      name: payload.name || null,
-      picture: payload.picture || null,
-    });
-    cookieStore.set('projust_user', userInfo, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, uid: user.uid });
   } catch (err) {
     console.error('Session POST error:', err);
     return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
   }
 }
 
-/**
- * DELETE /api/auth/session — Clear the session cookie (sign out)
- */
+/** DELETE /api/auth/session — sign out */
 export async function DELETE() {
-  const cookieStore = cookies();
-  cookieStore.set('projust_session', '', { path: '/', maxAge: 0 });
-  cookieStore.set('projust_user', '', { path: '/', maxAge: 0 });
-  cookieStore.set('projust_mock_user', '', { path: '/', maxAge: 0 });
+  const store = cookies();
+  store.set(SESSION_COOKIE, '', { path: '/', maxAge: 0 });
+  store.set('projust_user', '', { path: '/', maxAge: 0 });
+  store.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 });
   return NextResponse.json({ ok: true });
-}
-
-/**
- * Decode a JWT payload without verifying the signature.
- * For production, use Firebase Admin SDK's verifyIdToken() instead.
- */
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    return JSON.parse(payload);
-  } catch {
-    return null;
-  }
 }

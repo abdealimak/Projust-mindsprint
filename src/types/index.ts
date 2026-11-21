@@ -9,6 +9,7 @@ export interface Profile {
   github_username: string | null;
   github_connected: boolean;
   linkedin_url: string | null;
+  public_profile?: boolean;
   created_at: string;
   updated_at?: string;
 }

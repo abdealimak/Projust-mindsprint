@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { SearchPalette } from '@/components/layout/SearchPalette';
 import { Profile } from '@/types';
 
 export function AppShell({
@@ -13,34 +14,43 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#0c0e14] text-[#111827] dark:text-[#f3f4f6] flex flex-row">
-      {/* Sidebar Overlay for mobile */}
+    <div className="min-h-screen bg-paper text-ink flex flex-row">
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-30 lg:hidden"
+          className="fixed inset-0 bg-ink/30 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden
         />
       )}
 
-      {/* Persistent Left Sidebar */}
       <AppSidebar
         profile={profile}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onOpenSearch={() => setSearchOpen(true)}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <AppHeader
-          profile={profile}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <AppHeader onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <SearchPalette isOpen={searchOpen} onClose={closeSearch} />
     </div>
   );
 }

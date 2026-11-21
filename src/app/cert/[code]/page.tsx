@@ -1,155 +1,237 @@
 import React from 'react';
-import Link from 'next/link';
-import { getProfile, getCertificateByCode } from '@/lib/data';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { BadgeCheck } from 'lucide-react';
+import { getCertificateByCode } from '@/lib/data';
+import { getCurrentUser } from '@/lib/auth/user';
+import { ASPECTS, ASPECT_LABELS, type LearningCertificate } from '@/types/learning';
 import { AspectRadar } from '@/components/charts/AspectRadar';
+import { ProjustLogo } from '@/components/ui/Logo';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import {
-  TrophyIcon,
-  CheckCircleFillIcon,
-  RepoIcon,
-  ArrowRightIcon,
-} from '@primer/octicons-react';
+import { CopyLinkButton, VerifyForm } from './CertActions';
 
-export default async function CertificatePlaceholderPage({
-  params,
-}: {
-  params: { code: string };
-}) {
-  const profile = await getProfile();
+export const dynamic = 'force-dynamic';
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const shortSha = (sha: string | null) => (sha ? sha.slice(0, 7) : null);
+
+const STRENGTH_BARS: Record<LearningCertificate['concepts'][number]['strength'], number> = {
+  proficient: 1,
+  advanced: 2,
+  master: 3,
+};
+
+export async function generateMetadata({ params }: { params: { code: string } }): Promise<Metadata> {
   const cert = await getCertificateByCode(params.code);
+  if (!cert) return { title: 'Certificate not found — Projust' };
+  return {
+    title: `${cert.code} · ${cert.recipient_name} — Projust certificate`,
+    description: `${cert.recipient_name} scored ${Math.round(cert.overall)}/100 on ${cert.repo_full_name}, verified by Projust.`,
+  };
+}
 
-  if (!cert) {
-    return (
-      <div className="min-h-screen flex flex-col bg-canvas text-fg">
-        <Header profile={profile} />
-        <main className="flex-1 flex items-center justify-center p-8">
-          <div className="text-center">
-            <h1 className="text-xl font-bold">Certificate Not Found</h1>
-            <p className="text-fg-muted mt-2">No verification certificate matches {params.code}.</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+export default async function CertificatePage({ params }: { params: { code: string } }) {
+  const [cert, user] = await Promise.all([getCertificateByCode(params.code), getCurrentUser()]);
+  if (!cert) notFound();
+
+  const overall = Math.round(cert.overall);
+  const history = [...(cert.history || [])].sort((a, b) => b.version - a.version);
+  const sha = shortSha(cert.commit_sha);
 
   return (
-    <div className="min-h-screen flex flex-col bg-canvas text-fg">
-      <Header profile={profile} />
+    <div className="min-h-screen flex flex-col bg-paper text-ink">
+      <Header signedIn={!!user} />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 space-y-6">
-        {/* Certificate Display Shell */}
-        <div className="p-6 md:p-8 rounded-[8px] border-2 border-border bg-gradient-to-b from-canvas-subtle to-canvas shadow-xl space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
+      <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-10 py-10 lg:py-14">
+        {cert.sample && (
+          <div
+            role="note"
+            className="mb-8 rounded-m border border-[#F1DEAF] bg-[#FDF3DC] px-5 py-4 text-[14.5px] text-[#6B4708]"
+          >
+            <strong className="font-semibold">Sample certificate.</strong> This is demo data to show what a
+            Projust certificate looks like. It was not earned by a real person.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
+          {/* The credential itself */}
+          <article
+            aria-label={`Certificate ${cert.code}`}
+            className="lg:col-span-7 relative rounded-[22px] bg-paper-2 border border-line shadow-card p-6 sm:p-9 overflow-hidden
+                       before:content-[''] before:absolute before:inset-[10px] before:border before:border-line before:rounded-[14px] before:pointer-events-none"
+          >
+            <div className="relative flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <ProjustLogo className="text-[18px]" />
+              <div className="font-mono text-[12px] text-muted sm:text-right">
+                Certificate ID
+                <b className="block text-ink font-medium text-[14px]">{cert.code}</b>
+              </div>
+            </div>
+
+            <p className="relative mt-8 text-[12.5px] text-muted">Awarded to</p>
+            <h1 className="relative pj-display text-[clamp(38px,5vw,58px)] mt-1 break-words">{cert.recipient_name}</h1>
+            <p className="relative mt-3 text-[14px] text-muted break-all">
+              for understanding <span className="font-mono text-ink">{cert.repo_full_name}</span>
+              {sha && (
+                <>
+                  {' '}at commit <span className="font-mono text-ink">{sha}</span>
+                </>
+              )}
+            </p>
+
+            <div className="relative mt-8 grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-6 sm:gap-8 items-center">
+              <div className="mx-auto w-full max-w-[240px] sm:max-w-none">
+                <AspectRadar scores={cert.scores} height={210} />
+              </div>
+              <dl className="space-y-2.5">
+                {ASPECTS.map((a) => {
+                  const v = Math.round(cert.scores[a] ?? 0);
+                  return (
+                    <div key={a} className="grid grid-cols-[110px_1fr_32px] items-center gap-3 text-[13.5px]">
+                      <dt className="text-ink-2">{ASPECT_LABELS[a]}</dt>
+                      <dd className="h-1.5 rounded-full bg-line overflow-hidden" aria-hidden>
+                        <span className="block h-full rounded-full bg-ink" style={{ width: `${v}%` }} />
+                      </dd>
+                      <dd className="font-mono text-[13px] text-right">{v}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+
+            <div className="relative mt-8 grid grid-cols-3 gap-3 border-y border-line py-5">
+              <div>
+                <p className="pj-display text-[40px] sm:text-[48px]">
+                  <span className="bg-lime px-1.5 rounded-[6px]">{overall}</span>
+                </p>
+                <p className="mt-1.5 text-[12.5px] text-muted">Overall, out of 100</p>
+              </div>
+              <div>
+                <p className="pj-display text-[40px] sm:text-[48px]">
+                  {cert.ownership_pct != null ? `${Math.round(cert.ownership_pct)}%` : '—'}
+                </p>
+                <p className="mt-1.5 text-[12.5px] text-muted">Commits by recipient</p>
+              </div>
+              <div>
+                <p className="pj-display text-[40px] sm:text-[48px]">{cert.concepts.length}</p>
+                <p className="mt-1.5 text-[12.5px] text-muted">Concepts mastered</p>
+              </div>
+            </div>
+
+            {cert.concepts.length > 0 && (
+              <div className="relative mt-6">
+                <p className="text-[12.5px] text-muted mb-2.5">Concepts mastered</p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {cert.concepts.map((c) => (
+                    <li key={c.name} className="pj-chip" title={`${c.category}, ${c.strength}`}>
+                      {c.name}
+                      <span className="inline-flex gap-[2px]" aria-label={c.strength}>
+                        {[1, 2, 3].map((n) => (
+                          <span
+                            key={n}
+                            className={`w-1 h-2.5 rounded-[2px] ${n <= STRENGTH_BARS[c.strength] ? 'bg-ink' : 'bg-line-2'}`}
+                          />
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="relative mt-7 pt-5 border-t border-dashed border-line-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="space-y-2 text-[13.5px]">
+                <span className="inline-block font-mono text-[11px] px-2.5 py-1 rounded-full bg-ink text-paper">
+                  {cert.level}
+                </span>
+                <p className="flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 text-pass shrink-0" aria-hidden />
+                  Verified by Projust on {fmtDate(cert.issued_at)}
+                </p>
+              </div>
+              <p className="font-mono text-[11.5px] text-muted">
+                v{cert.version}, updated {fmtDate(cert.updated_at)}
+              </p>
+            </div>
+          </article>
+
+          {/* Verification and history */}
+          <aside className="lg:col-span-5 flex flex-col gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <TrophyIcon className="w-6 h-6 text-accent" />
-                <span className="font-mono text-sm tracking-wider uppercase text-fg-muted">
-                  Official Projust Credential
-                </span>
-              </div>
-              <h1 className="text-2xl font-bold text-fg tracking-tight">
-                Certificate of Project Comprehension
-              </h1>
+              <span className="pj-eyebrow">Verification</span>
+              <h2 className="pj-display text-[clamp(32px,3.4vw,44px)] mt-4">
+                {cert.sample ? 'A sample credential.' : 'This certificate is genuine.'}{' '}
+                <em>{cert.sample ? 'Not issued to a real person.' : 'Issued and hosted by Projust.'}</em>
+              </h2>
+              <p className="mt-4 text-[15px] text-muted max-w-[46ch]">
+                The scores come from a quiz built from this repository&rsquo;s own code. The certificate updates
+                when the recipient learns more, and every version is kept.
+              </p>
             </div>
 
-            <div className="flex flex-col sm:items-end">
-              <span className="font-mono text-lg font-bold text-accent">
-                {cert.cert_code}
-              </span>
-              <Badge variant={cert.level === 'Interview-verified' ? 'purple' : 'success'} className="mt-1">
-                {cert.level}
-              </Badge>
-            </div>
-          </div>
-
-          {/* Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div className="space-y-4">
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-fg-muted font-semibold">
-                  Recipient
-                </span>
-                <p className="text-lg font-semibold text-fg">
-                  <Link href={`/u/${cert.recipient_username}`} className="hover:text-accent underline">
-                    {cert.recipient_name}
-                  </Link>
-                </p>
+            <dl className="pj-card divide-y divide-line text-[14px]">
+              <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <dt className="text-muted">Status</dt>
+                <dd className="flex items-center gap-1.5 font-medium">
+                  <span className={`w-2 h-2 rounded-full ${cert.sample ? 'bg-[#B7791F]' : 'bg-pass'}`} aria-hidden />
+                  {cert.sample ? 'Sample' : 'Valid'}
+                </dd>
               </div>
-
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-fg-muted font-semibold">
-                  Verified Repository
-                </span>
-                <p className="text-[14px] font-mono text-fg flex items-center gap-1.5 mt-0.5">
-                  <RepoIcon className="w-4 h-4 text-fg-muted" />
-                  {cert.repo_full_name}
-                </p>
+              <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <dt className="text-muted">Certificate ID</dt>
+                <dd className="font-mono text-[13px]">{cert.code}</dd>
               </div>
-
-              <div className="flex items-center gap-6 text-[12px] text-fg-muted">
-                <div>
-                  <span className="block font-semibold text-fg text-[14px]">
-                    {cert.overall_score}/100
-                  </span>
-                  <span>Overall Score</span>
-                </div>
-                <div>
-                  <span className="block font-semibold text-fg text-[14px]">
-                    {cert.ownership_pct}%
-                  </span>
-                  <span>Commit Ownership</span>
-                </div>
-                <div>
-                  <span className="block font-semibold text-fg text-[14px] font-mono">
-                    {cert.version}
-                  </span>
-                  <span>Dynamic Version</span>
-                </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <dt className="text-muted">First issued</dt>
+                <dd>{fmtDate(cert.issued_at)}</dd>
               </div>
-            </div>
+              <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <dt className="text-muted">Last updated</dt>
+                <dd>{fmtDate(cert.updated_at)}</dd>
+              </div>
+            </dl>
 
-            {/* Compact Radar */}
-            <div className="flex flex-col items-center p-3 rounded-[6px] border border-border bg-canvas-subtle">
-              <span className="text-[11px] text-fg-muted font-semibold uppercase tracking-wider mb-1">
-                Six-Aspect Verification Radar
-              </span>
-              <AspectRadar scores={cert.scores} height={200} />
-            </div>
-          </div>
-
-          {/* Mastered concepts */}
-          <div className="pt-4 border-t border-border">
-            <h3 className="text-[13px] font-semibold text-fg mb-2">Concepts Mastered</h3>
             <div className="flex flex-wrap gap-2">
-              {cert.concepts_mastered.map((c, i) => (
-                <span
-                  key={i}
-                  className="px-2.5 py-1 rounded-full border border-border bg-canvas text-[11px] text-fg flex items-center gap-1"
-                >
-                  <CheckCircleFillIcon className="w-3 h-3 text-success" />
-                  <span>{c.name}</span>
-                </span>
-              ))}
+              <CopyLinkButton />
             </div>
-          </div>
 
-          {/* Action footer */}
-          <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 text-[12px] text-fg-muted">
-            <span>Verified dynamically via Projust Automated Ingestion & Viva engine.</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="default">
-                Add to LinkedIn
-              </Button>
-              <Button size="sm" variant="primary" icon={<ArrowRightIcon className="w-3.5 h-3.5" />}>
-                Detailed Report
-              </Button>
+            {history.length > 0 && (
+              <section aria-labelledby="history-heading">
+                <h3 id="history-heading" className="text-[15px] font-semibold">
+                  Version history
+                </h3>
+                <ol className="mt-3 pj-card divide-y divide-line">
+                  {history.map((h) => {
+                    const current = h.version === cert.version;
+                    return (
+                      <li key={h.version} className="flex items-center justify-between gap-4 px-5 py-3 text-[14px]">
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <span className="font-mono text-[12.5px] w-7 shrink-0">v{h.version}</span>
+                          <span className={current ? 'text-ink' : 'text-muted'}>{fmtDate(h.at)}</span>
+                          {current && (
+                            <span className="text-[11.5px] px-2 py-px rounded-full bg-olive text-[#F6F8EC]">Current</span>
+                          )}
+                        </span>
+                        <span className="flex items-center gap-3 shrink-0">
+                          {shortSha(h.commit_sha) && (
+                            <span className="hidden sm:inline font-mono text-[12px] text-muted">{shortSha(h.commit_sha)}</span>
+                          )}
+                          <span className="font-mono text-[13px]">avg {Math.round(h.overall)}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            )}
+
+            <div className="pt-6 border-t border-line">
+              <VerifyForm />
             </div>
-          </div>
+          </aside>
         </div>
       </main>
 

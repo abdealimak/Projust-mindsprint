@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts';
-import { AspectScores } from '@/types';
+import { ASPECTS, ASPECT_LABELS, type AspectScores } from '@/types/learning';
 
 interface AspectRadarProps {
   scores: AspectScores;
@@ -18,39 +18,30 @@ interface AspectRadarProps {
   showTicks?: boolean;
 }
 
+/** Six-skill radar in the landing style: warm grid, lime fill, ink stroke. */
 export function AspectRadar({ scores, height = 220 }: AspectRadarProps) {
-  const data = [
-    { subject: 'Concepts', fullSubject: 'Concept Understanding', score: scores.concept_understanding },
-    { subject: 'Comprehension', fullSubject: 'Code Comprehension', score: scores.code_comprehension },
-    { subject: 'Debugging', fullSubject: 'Debugging & Remediation', score: scores.debugging },
-    { subject: 'Architecture', fullSubject: 'Architecture & Design', score: scores.architecture_design },
-    { subject: 'Security', fullSubject: 'Security & Best Practices', score: scores.security_best_practices },
-    { subject: 'AI Collab', fullSubject: 'AI Collaboration & Prompting', score: scores.ai_collaboration },
-  ];
+  // Short axis labels so they fit small radars; full names stay in the tooltip.
+  const short: Partial<Record<(typeof ASPECTS)[number], string>> = { ai_collaboration: 'AI collab', architecture_design: 'Architecture' };
+  const data = ASPECTS.map((a) => ({ subject: ASPECT_LABELS[a], axis: short[a] ?? ASPECT_LABELS[a], score: Math.round(scores[a] ?? 0) }));
 
   return (
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-          <PolarGrid stroke="var(--border)" strokeDasharray="3 3" />
-          <PolarAngleAxis
-            dataKey="subject"
-            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-          />
-          <PolarRadiusAxis
-            angle={30}
-            domain={[0, 100]}
-            tick={false}
-            axisLine={false}
-          />
+        <RadarChart cx="50%" cy="50%" outerRadius="66%" data={data} margin={{ top: 12, right: 30, bottom: 12, left: 30 }} style={{ overflow: "visible" }}>
+          <PolarGrid stroke="#E3DFD7" />
+          <PolarAngleAxis dataKey="axis" tick={{ fill: '#5E5B56', fontSize: 11 }} />
+          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
           <Tooltip
+            cursor={false}
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
-                const item = payload[0].payload;
+                const item = payload[0].payload as { subject: string; score: number };
                 return (
-                  <div className="bg-canvas-subtle border border-border px-2.5 py-1.5 rounded-[6px] shadow-lg text-[12px]">
-                    <p className="font-semibold text-fg">{item.fullSubject}</p>
-                    <p className="text-accent font-mono font-medium">Score: {item.score}/100</p>
+                  <div className="bg-sheet border border-line px-3 py-2 rounded-s shadow-lift text-[12.5px]">
+                    <p className="font-medium text-ink">{item.subject}</p>
+                    <p className="text-muted">
+                      <span className="font-mono text-ink">{item.score}</span> / 100
+                    </p>
                   </div>
                 );
               }
@@ -58,11 +49,14 @@ export function AspectRadar({ scores, height = 220 }: AspectRadarProps) {
             }}
           />
           <Radar
-            name="Skill Score"
+            name="Score"
             dataKey="score"
-            stroke="var(--accent)"
-            fill="var(--accent)"
-            fillOpacity={0.25}
+            stroke="#111110"
+            strokeWidth={1.6}
+            fill="rgba(205,235,90,.45)"
+            fillOpacity={1}
+            dot={{ r: 2.5, fill: '#111110', stroke: 'none' }}
+            isAnimationActive={false}
           />
         </RadarChart>
       </ResponsiveContainer>

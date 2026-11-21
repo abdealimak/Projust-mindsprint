@@ -1,36 +1,24 @@
 import React from 'react';
 import Link from 'next/link';
+import { ProjustLogo } from '@/components/ui/Logo';
 
+/** Footer for public pages. Only links to pages that exist. */
 export function Footer() {
   return (
-    <footer className="w-full border-t border-border py-6 px-4 mt-auto bg-canvas">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-[12px] text-fg-muted">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-fg">Projust</span>
-          <span>&copy; {new Date().getFullYear()} Projust, Inc. Justice for honest builders.</span>
+    <footer className="w-full border-t border-line bg-paper mt-auto">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-10 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[13.5px] text-muted">
+        <div className="flex items-center gap-3">
+          <ProjustLogo className="text-[17px]" />
+          <span>Proof that you understand the code you ship.</span>
         </div>
-
-        <nav className="flex items-center gap-4">
-          <Link href="/terms" className="hover:text-accent transition-colors">
-            Terms
-          </Link>
-          <Link href="/privacy" className="hover:text-accent transition-colors">
-            Privacy
-          </Link>
-          <Link href="/docs" className="hover:text-accent transition-colors">
-            Docs
-          </Link>
-          <Link href="/contact" className="hover:text-accent transition-colors">
-            Contact
-          </Link>
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-accent transition-colors"
-          >
-            GitHub
+        <nav className="flex items-center gap-5">
+          <a href="/" className="hover:text-ink">
+            Home
           </a>
+          <Link href="/login" className="hover:text-ink">
+            Sign in
+          </Link>
+          <span>&copy; {new Date().getFullYear()} Projust</span>
         </nav>
       </div>
     </footer>

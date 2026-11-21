@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { streamText, generateObject } from 'ai';
+import { streamText } from 'ai';
+import { generateJSON } from '@/lib/brain/llm';
 import { createClient } from '@/lib/supabase/server';
-import { llmModel, llmFastModel } from '@/lib/ai/provider';
+import { llmModel } from '@/lib/ai/provider';
+import { claudeTextStreamResponse, isClaudeConfigured } from '@/lib/ai/claude';
 import { ASK_SYSTEM_PROMPT } from '@/lib/ai/prompts/ask';
 import { ROUTER_SYSTEM_PROMPT } from '@/lib/ai/prompts/router';
 import { FileRouterSchema } from '@/lib/ai/schemas';
 import { parseCitations, formatNumberedFile } from '@/lib/ai/citations';
+import { getCurrentUserId } from '@/lib/auth/user';
 
 export async function POST(
   request: Request,
@@ -20,18 +22,9 @@ export async function POST(
       return NextResponse.json({ error: 'Question is required' }, { status: 400 });
     }
 
-    const cookieStore = cookies();
-    const userCookie = cookieStore.get('projust_user')?.value;
-    const mockCookie = cookieStore.get('projust_mock_user')?.value;
-    let userId = 'demo_user';
-    if (userCookie) {
-      try {
-        userId = JSON.parse(userCookie).uid || 'demo_user';
-      } catch {
-        // ignore
-      }
-    } else if (mockCookie) {
-      userId = mockCookie;
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
 
     const supabase = createClient();
@@ -60,7 +53,8 @@ export async function POST(
       .from('projects')
       .select('id, repo_full_name, summary')
       .eq('id', projectId)
-      .single();
+      .eq('user_id', userId)
+      .maybeSingle();
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -80,11 +74,13 @@ export async function POST(
     let candidatePaths: string[] = [];
 
     try {
-      const { object: routeResult } = await generateObject({
-        model: llmFastModel,
+      const routeResult = await generateJSON({
+        schema: FileRouterSchema,
         system: ROUTER_SYSTEM_PROMPT,
         prompt: `Question: ${question}\n\nProject Summary: ${JSON.stringify(project.summary)}\n\nFile Tree:\n${fileTreeSnippet}`,
-        schema: FileRouterSchema,
+        fast: true,
+        retries: 1,
+        maxOutputTokens: 800,
       });
       candidatePaths = routeResult.files.map((f) => f.path);
     } catch {
@@ -179,22 +175,33 @@ ${contextSnippets.join('\n\n')}
 QUESTION:
 ${question}`;
 
+    const saveAnswer = async (text: string) => {
+      // Parse & validate citations
+      const citations = parseCitations(text, validFileMap);
+      if (activeThreadId) {
+        await supabase.from('chat_messages').insert({
+          thread_id: activeThreadId,
+          role: 'assistant',
+          content: text,
+          citations,
+        });
+      }
+    };
+
+    if (isClaudeConfigured) {
+      return claudeTextStreamResponse({
+        system: ASK_SYSTEM_PROMPT,
+        prompt: userPrompt,
+        headers: { 'x-thread-id': activeThreadId || '' },
+        onFinish: saveAnswer,
+      });
+    }
+
     const result = streamText({
       model: llmModel,
       system: ASK_SYSTEM_PROMPT,
       prompt: userPrompt,
-      onFinish: async ({ text }) => {
-        // Parse & validate citations
-        const citations = parseCitations(text, validFileMap);
-        if (activeThreadId) {
-          await supabase.from('chat_messages').insert({
-            thread_id: activeThreadId,
-            role: 'assistant',
-            content: text,
-            citations,
-          });
-        }
-      },
+      onFinish: ({ text }) => saveAnswer(text),
     });
 
     return result.toTextStreamResponse({

@@ -1,21 +1,25 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { DEMO_COOKIE, SESSION_COOKIE, resolveUser } from '@/lib/auth/session';
 
 /**
- * Simplified middleware: checks for Firebase session cookie or demo mock cookie.
+ * Middleware: lets a request through only with a verified session or an allowed demo cookie.
  * No more Supabase auth dependency.
  */
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Check authentication: Firebase session or demo mock
-  const firebaseSession = request.cookies.get('projust_session')?.value;
-  const mockUser = request.cookies.get('projust_mock_user')?.value;
-  const isAuthenticated = Boolean(firebaseSession || mockUser);
+  // Verified signed session, or a (namespaced) demo user when demo mode is allowed
+  const user = await resolveUser(
+    request.cookies.get(SESSION_COOKIE)?.value,
+    request.cookies.get(DEMO_COOKIE)?.value
+  );
+  const isAuthenticated = Boolean(user);
 
-  // Root redirect
+  // Root: the marketing landing page (static, public/landing.html) for everyone.
+  // Its sign-in CTAs go to /login, which forwards signed-in users to the dashboard.
   if (pathname === '/') {
-    const target = isAuthenticated ? '/dashboard' : '/login';
-    return NextResponse.redirect(new URL(target, request.url));
+    return NextResponse.rewrite(new URL('/landing.html', request.url));
   }
 
   // Public routes that don't need auth
@@ -25,6 +29,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/auth') ||
     pathname.startsWith('/u/') ||
     pathname.startsWith('/cert/') ||
+    pathname.startsWith('/api/certificates/PJ-') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.includes('.');
@@ -36,8 +41,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect authenticated users away from login
-  if (isAuthenticated && pathname === '/login') {
+  // Real accounts skip the login page. Demo users still see it, so they can switch to
+  // GitHub or Google sign-in (the landing page's "Sign in" buttons point here).
+  if (user && !user.demo && pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Plus,
 } from 'lucide-react';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 interface RepoItem {
   id: number;
@@ -42,6 +43,15 @@ export default function NewProjectPage() {
   // State for public URL tab
   const [publicUrl, setPublicUrl] = useState('');
   const [urlImporting, setUrlImporting] = useState(false);
+
+  // A GitHub link pasted into the dashboard prompt arrives as ?url=
+  useEffect(() => {
+    const pasted = new URLSearchParams(window.location.search).get('url');
+    if (pasted) {
+      setPublicUrl(pasted);
+      setActiveTab('url');
+    }
+  }, []);
 
   useEffect(() => {
     async function loadRepos() {
@@ -107,16 +117,14 @@ export default function NewProjectPage() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* Header */}
-      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-800">
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
-          Import a Repository
-        </h1>
-        <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-          Select a repository from your GitHub account or paste any public GitHub URL to analyze codebase AST and start AI viva tutoring.
-        </p>
-      </div>
+    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1040px] mx-auto w-full space-y-6">
+      <PageHeader
+        className="mb-2"
+        eyebrow="Import"
+        title="Bring a repository."
+        em="We'll read it with you."
+        description="Pick one from your GitHub account or paste any public GitHub link. We index the code, check your commit share and write a summary."
+      />
 
       {errorMsg && (
         <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
@@ -126,14 +134,14 @@ export default function NewProjectPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-neutral-200 dark:border-neutral-800 text-xs font-medium">
+      <div className="inline-flex p-1 gap-0.5 rounded-full border border-line bg-sheet text-[14px] font-medium">
         <button
           type="button"
           onClick={() => setActiveTab('picker')}
-          className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition ${
+          className={`flex items-center gap-2 h-9 px-4 rounded-full transition-colors ${
             activeTab === 'picker'
-              ? 'border-neutral-900 dark:border-white text-neutral-900 dark:text-white font-semibold'
-              : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
+              ? 'bg-olive text-[#F6F8EC] shadow-pill'
+              : 'text-ink-2 hover:bg-paper'
           }`}
         >
           <FolderGit2 className="w-4 h-4" />
@@ -143,10 +151,10 @@ export default function NewProjectPage() {
         <button
           type="button"
           onClick={() => setActiveTab('url')}
-          className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition ${
+          className={`flex items-center gap-2 h-9 px-4 rounded-full transition-colors ${
             activeTab === 'url'
-              ? 'border-neutral-900 dark:border-white text-neutral-900 dark:text-white font-semibold'
-              : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
+              ? 'bg-olive text-[#F6F8EC] shadow-pill'
+              : 'text-ink-2 hover:bg-paper'
           }`}
         >
           <LinkIcon className="w-4 h-4" />

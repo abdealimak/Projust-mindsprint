@@ -1,360 +1,648 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Profile } from '@/types';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Misc';
-import { useTheme } from '@/components/layout/ThemeProvider';
-import { createClient } from '@/lib/supabase/client';
+import { Avatar, Skeleton } from '@/components/ui/Misc';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase/auth';
+import { cn } from '@/lib/utils';
 import {
   PersonIcon,
   ShieldCheckIcon,
-  SunIcon,
-  MoonIcon,
   EyeIcon,
   MarkGithubIcon,
+  MailIcon,
+  CheckIcon,
+  AlertIcon,
 } from '@primer/octicons-react';
 
+type SettingsProfile = Profile & { public_profile?: boolean };
+type Tab = 'profile' | 'account' | 'privacy';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'blocked';
+
+const FIELDS = ['username', 'full_name', 'headline', 'bio', 'linkedin_url'] as const;
+type Field = (typeof FIELDS)[number];
+type FormValues = Record<Field, string>;
+type FieldErrors = Partial<Record<Field | 'public_profile', string>>;
+
+const LIMITS: Record<Exclude<Field, 'username'>, number> = {
+  full_name: 80,
+  headline: 120,
+  bio: 600,
+  linkedin_url: 300,
+};
+const LINKEDIN_RE = /^https:\/\/(www\.)?linkedin\.com(\/[^\s]*)?$/i;
+
+/** Mirrors the server's zod rules so people see problems on blur, before saving. */
+function validateField(field: Field, raw: string): string | undefined {
+  const v = raw.trim();
+  if (field === 'username') {
+    if (v.length < 3) return 'Username needs at least 3 characters.';
+    if (v.length > 30) return 'Username can be at most 30 characters.';
+    if (!/^[a-z0-9_-]+$/.test(v)) return 'Use only lowercase letters, numbers, - and _ in your username.';
+    return undefined;
+  }
+  const max = LIMITS[field];
+  if (v.length > max) return `Keep this under ${max} characters (now ${v.length}).`;
+  if (field === 'linkedin_url' && v && !LINKEDIN_RE.test(v)) {
+    return 'Use a full LinkedIn link that starts with https://linkedin.com or https://www.linkedin.com.';
+  }
+  return undefined;
+}
+
+function toForm(p: SettingsProfile): FormValues {
+  return {
+    username: p.username || '',
+    full_name: p.full_name || '',
+    headline: p.headline || '',
+    bio: p.bio || '',
+    linkedin_url: p.linkedin_url || '',
+  };
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  'google.com': 'Google',
+  'github.com': 'GitHub',
+  password: 'Email and password',
+};
+
+const inputBase =
+  'w-full bg-sheet border border-line-2 text-[14.5px] text-ink placeholder:text-muted/70 ' +
+  'transition-colors focus:outline-none focus:border-ink disabled:bg-paper disabled:text-muted';
+
 export default function SettingsClient({ initialProfile }: { initialProfile: Profile }) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'appearance' | 'privacy'>('profile');
-  const [profile, setProfile] = useState<Profile>(initialProfile);
-  const [saving, setSaving] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-  const [errorMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const [profile, setProfile] = useState<SettingsProfile>(initialProfile);
+  const [isDemo, setIsDemo] = useState(initialProfile.id.startsWith('demo:'));
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const { theme, setTheme } = useTheme();
+  const [form, setForm] = useState<FormValues>(() => toForm(initialProfile));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [status, setStatus] = useState<SaveStatus>('idle');
+  const [message, setMessage] = useState<string | null>(null);
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setSavedSuccess(false);
+  const [privacyStatus, setPrivacyStatus] = useState<SaveStatus>('idle');
+  const [privacyMessage, setPrivacyMessage] = useState<string | null>(null);
 
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: profile.full_name,
-          headline: profile.headline,
-          bio: profile.bio,
-          linkedin_url: profile.linkedin_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
+  const [github, setGithub] = useState<'checking' | 'connected' | 'disconnected' | 'unknown'>('checking');
+  const [provider, setProvider] = useState<string | null>(null);
 
-      if (error) {
-        // If row doesn't exist yet, try upsert
-        await supabase.from('profiles').upsert({
-          id: profile.id,
-          username: profile.username,
-          full_name: profile.full_name,
-          headline: profile.headline,
-          bio: profile.bio,
-          linkedin_url: profile.linkedin_url,
-          email: profile.email,
-          github_connected: profile.github_connected,
-        });
+  // Load the saved profile from the server route.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' });
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setLoadError(body.error || "Couldn't load your profile. Refresh the page to try again.");
+        } else {
+          setProfile(body.profile);
+          setForm(toForm(body.profile));
+          setIsDemo(Boolean(body.demo));
+        }
+      } catch {
+        if (!cancelled) setLoadError("Couldn't load your profile. Check your connection and refresh.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // GitHub repo access is a separate OAuth grant; ask the repos route for the truth.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/github/repos', { cache: 'no-store' })
+      .then((r) => r.json().then((b) => ({ ok: r.ok, b })))
+      .then(({ ok, b }) => {
+        if (cancelled) return;
+        if (!ok && typeof b?.connected !== 'boolean') setGithub('unknown');
+        else setGithub(b.connected ? 'connected' : 'disconnected');
+      })
+      .catch(() => !cancelled && setGithub('unknown'));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Which identity provider the person signed in with (read-only, from Firebase).
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    try {
+      return onAuthStateChanged(getFirebaseAuth(), (u) => {
+        setProvider(u?.providerData[0]?.providerId ?? null);
+      });
     } catch {
-      // In offline mock mode, still save client state and show success
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
-    } finally {
-      setSaving(false);
+      return undefined;
+    }
+  }, []);
+
+  const saved = useMemo(() => toForm(profile), [profile]);
+  const dirty = FIELDS.some((f) => form[f].trim() !== saved[f].trim());
+  const hasErrors = FIELDS.some((f) => fieldErrors[f]);
+
+  const setField = (field: Field, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    // Clear the error as soon as the value becomes valid again.
+    if (fieldErrors[field] && !validateField(field, value)) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+    if (status !== 'idle' && status !== 'saving') {
+      setStatus('idle');
+      setMessage(null);
     }
   };
 
+  const blurField = (field: Field) => {
+    setFieldErrors((prev) => ({ ...prev, [field]: validateField(field, form[field]) }));
+  };
+
+  const patchProfile = useCallback(async (payload: Record<string, unknown>) => {
+    const res = await fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    return { res, body };
+  }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextErrors: FieldErrors = {};
+    FIELDS.forEach((f) => {
+      const err = validateField(f, form[f]);
+      if (err) nextErrors[f] = err;
+    });
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      setStatus('error');
+      setMessage('Fix the highlighted fields, then save again.');
+      return;
+    }
+
+    const payload: Partial<FormValues> = {};
+    FIELDS.forEach((f) => {
+      if (form[f].trim() !== saved[f].trim()) payload[f] = form[f].trim();
+    });
+
+    setStatus('saving');
+    setMessage(null);
+    try {
+      const { res, body } = await patchProfile(payload);
+      if (res.ok) {
+        setProfile(body.profile);
+        setForm(toForm(body.profile));
+        setStatus('saved');
+        setMessage('Profile saved.');
+        return;
+      }
+      if (res.status === 400 && body.fieldErrors) setFieldErrors(body.fieldErrors);
+      setStatus(res.status === 403 ? 'blocked' : 'error');
+      setMessage(body.error || "Couldn't save your profile. Try again.");
+    } catch {
+      setStatus('error');
+      setMessage("Couldn't reach the server. Check your connection and try again.");
+    }
+  };
+
+  const togglePublic = async () => {
+    const next = !(profile.public_profile ?? true);
+    const prev = profile;
+    setProfile({ ...profile, public_profile: next });
+    setPrivacyStatus('saving');
+    setPrivacyMessage(null);
+    try {
+      const { res, body } = await patchProfile({ public_profile: next });
+      if (res.ok) {
+        setProfile(body.profile);
+        setPrivacyStatus('saved');
+        setPrivacyMessage(next ? 'Your profile is public.' : 'Your profile is now private.');
+        return;
+      }
+      setProfile(prev);
+      setPrivacyStatus(res.status === 403 ? 'blocked' : 'error');
+      setPrivacyMessage(body.error || "Couldn't update visibility. Try again.");
+    } catch {
+      setProfile(prev);
+      setPrivacyStatus('error');
+      setPrivacyMessage("Couldn't reach the server. Check your connection and try again.");
+    }
+  };
+
+  const tabs: { id: Tab; label: string; short: string; icon: typeof PersonIcon }[] = [
+    { id: 'profile', label: 'Profile', short: 'Profile', icon: PersonIcon },
+    { id: 'account', label: 'Account & providers', short: 'Account', icon: ShieldCheckIcon },
+    { id: 'privacy', label: 'Privacy', short: 'Privacy', icon: EyeIcon },
+  ];
+
+  const isPublic = profile.public_profile ?? true;
+  const providerLabel = isDemo
+    ? 'Demo session'
+    : provider
+      ? PROVIDER_LABEL[provider] || provider
+      : profile.email
+        ? 'Signed in'
+        : 'Unknown';
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="pb-4 border-b border-border">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Settings</h1>
-        <p className="text-[13px] text-fg-muted mt-0.5">
-          Manage your profile details, connected accounts, theme appearance, and verification privacy.
-        </p>
+    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1040px] mx-auto w-full space-y-6">
+      <PageHeader
+        className="mb-2"
+        eyebrow="Settings"
+        title="Your account,"
+        em="your rules."
+        description="Profile, connected accounts and what recruiters can see."
+      />
+
+      <div
+        role="tablist"
+        aria-label="Settings sections"
+        className="grid grid-cols-3 sm:inline-flex p-1 gap-0.5 rounded-full border border-line bg-sheet sm:w-fit"
+      >
+        {tabs.map(({ id, label, short, icon: Icon }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={activeTab === id}
+            onClick={() => setActiveTab(id)}
+            className={cn(
+              'flex items-center justify-center gap-2 h-9 px-3 sm:px-4 rounded-full text-[14px] font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40',
+              activeTab === id ? 'bg-olive text-[#F6F8EC] shadow-pill' : 'text-ink-2 hover:bg-paper'
+            )}
+          >
+            <Icon className="w-4 h-4 hidden sm:block" />
+            <span className="sm:hidden">{short}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border gap-2">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-3 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-[1px] ${
-            activeTab === 'profile'
-              ? 'border-accent text-fg font-semibold'
-              : 'border-transparent text-fg-muted hover:text-fg'
-          }`}
-        >
-          <PersonIcon className="w-4 h-4" />
-          Profile
-        </button>
-        <button
-          onClick={() => setActiveTab('account')}
-          className={`flex items-center gap-2 px-3 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-[1px] ${
-            activeTab === 'account'
-              ? 'border-accent text-fg font-semibold'
-              : 'border-transparent text-fg-muted hover:text-fg'
-          }`}
-        >
-          <ShieldCheckIcon className="w-4 h-4" />
-          Account & Providers
-        </button>
-        <button
-          onClick={() => setActiveTab('appearance')}
-          className={`flex items-center gap-2 px-3 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-[1px] ${
-            activeTab === 'appearance'
-              ? 'border-accent text-fg font-semibold'
-              : 'border-transparent text-fg-muted hover:text-fg'
-          }`}
-        >
-          <SunIcon className="w-4 h-4" />
-          Appearance
-        </button>
-        <button
-          onClick={() => setActiveTab('privacy')}
-          className={`flex items-center gap-2 px-3 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-[1px] ${
-            activeTab === 'privacy'
-              ? 'border-accent text-fg font-semibold'
-              : 'border-transparent text-fg-muted hover:text-fg'
-          }`}
-        >
-          <EyeIcon className="w-4 h-4" />
-          Privacy
-        </button>
-      </div>
+      {loadError && <Notice tone="error">{loadError}</Notice>}
 
-      {/* TAB 1: Profile */}
+      {isDemo && !loading && (
+        <Notice tone="info">
+          You&apos;re in a demo session. You can try the form, but changes won&apos;t be saved until you sign in
+          with GitHub or Google.
+        </Notice>
+      )}
+
+      {/* Profile */}
       {activeTab === 'profile' && (
         <Card>
-          <CardHeader title="Public Profile" />
+          <CardHeader title="Public profile" />
           <CardContent>
-            {savedSuccess && (
-              <div className="mb-4 p-3 bg-success/15 border border-success/40 text-success text-[13px] rounded-[6px]">
-                Profile updated successfully.
-              </div>
-            )}
-            {errorMsg && (
-              <div className="mb-4 p-3 bg-danger/15 border border-danger/40 text-danger text-[13px] rounded-[6px]">
-                {errorMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div className="flex items-center gap-4 pb-3 border-b border-border">
+            <form onSubmit={handleSaveProfile} noValidate className="space-y-5">
+              <div className="flex items-center gap-4 pb-5 border-b border-line">
                 <Avatar
                   src={profile.avatar_url}
-                  fallback={profile.username[0]?.toUpperCase()}
+                  fallback={(form.full_name || form.username || 'U')[0]}
                   size="xl"
                 />
-                <div>
-                  <h3 className="font-semibold text-fg">Profile picture</h3>
-                  <p className="text-[12px] text-fg-muted">
-                    Synced automatically from your connected OAuth provider.
-                  </p>
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink truncate">{form.full_name || form.username}</p>
+                  <p className="text-[13px] text-muted">Your photo comes from the account you signed in with.</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-fg mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={profile.full_name || ''}
-                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  className="w-full bg-canvas border border-border rounded-[6px] px-3 py-1.5 text-[13px] text-fg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+              {loading ? (
+                <div className="space-y-4" aria-busy="true" aria-label="Loading profile">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-11 w-full rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField
+                      id="full_name"
+                      label="Full name"
+                      error={fieldErrors.full_name}
+                      count={{ value: form.full_name.length, max: LIMITS.full_name }}
+                    >
+                      <input
+                        id="full_name"
+                        type="text"
+                        autoComplete="name"
+                        value={form.full_name}
+                        onChange={(e) => setField('full_name', e.target.value)}
+                        onBlur={() => blurField('full_name')}
+                        aria-invalid={Boolean(fieldErrors.full_name)}
+                        aria-describedby={fieldErrors.full_name ? 'full_name-error' : undefined}
+                        className={cn(inputBase, 'h-11 rounded-full px-4', fieldErrors.full_name && 'border-warn')}
+                      />
+                    </FormField>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-fg mb-1">
-                  Headline
-                </label>
-                <input
-                  type="text"
-                  value={profile.headline || ''}
-                  onChange={(e) => setProfile({ ...profile, headline: e.target.value })}
-                  placeholder="e.g. Full-stack builder · Distributed Systems"
-                  className="w-full bg-canvas border border-border rounded-[6px] px-3 py-1.5 text-[13px] text-fg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+                    <FormField
+                      id="username"
+                      label="Username"
+                      hint={
+                        <>
+                          Your public link:{' '}
+                          <span className="font-mono text-[12px]">/u/{form.username || 'username'}</span>
+                        </>
+                      }
+                      error={fieldErrors.username}
+                    >
+                      <input
+                        id="username"
+                        type="text"
+                        autoComplete="username"
+                        spellCheck={false}
+                        value={form.username}
+                        onChange={(e) => setField('username', e.target.value.toLowerCase())}
+                        onBlur={() => blurField('username')}
+                        aria-invalid={Boolean(fieldErrors.username)}
+                        aria-describedby={fieldErrors.username ? 'username-error' : 'username-hint'}
+                        className={cn(
+                          inputBase,
+                          'h-11 rounded-full px-4 font-mono text-[13.5px]',
+                          fieldErrors.username && 'border-warn'
+                        )}
+                      />
+                    </FormField>
+                  </div>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-fg mb-1">
-                  Bio
-                </label>
-                <textarea
-                  rows={3}
-                  value={profile.bio || ''}
-                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  placeholder="Tell recruiters and peers about your engineering focus…"
-                  className="w-full bg-canvas border border-border rounded-[6px] p-3 text-[13px] text-fg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+                  <FormField
+                    id="headline"
+                    label="Headline"
+                    error={fieldErrors.headline}
+                    count={{ value: form.headline.length, max: LIMITS.headline }}
+                  >
+                    <input
+                      id="headline"
+                      type="text"
+                      value={form.headline}
+                      onChange={(e) => setField('headline', e.target.value)}
+                      onBlur={() => blurField('headline')}
+                      placeholder="Full-stack builder, distributed systems"
+                      aria-invalid={Boolean(fieldErrors.headline)}
+                      aria-describedby={fieldErrors.headline ? 'headline-error' : undefined}
+                      className={cn(inputBase, 'h-11 rounded-full px-4', fieldErrors.headline && 'border-warn')}
+                    />
+                  </FormField>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-fg mb-1">
-                  LinkedIn Profile URL
-                </label>
-                <input
-                  type="url"
-                  value={profile.linkedin_url || ''}
-                  onChange={(e) => setProfile({ ...profile, linkedin_url: e.target.value })}
-                  placeholder="https://linkedin.com/in/username"
-                  className="w-full bg-canvas border border-border rounded-[6px] px-3 py-1.5 text-[13px] text-fg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+                  <FormField
+                    id="bio"
+                    label="Bio"
+                    error={fieldErrors.bio}
+                    count={{ value: form.bio.length, max: LIMITS.bio }}
+                  >
+                    <textarea
+                      id="bio"
+                      rows={4}
+                      value={form.bio}
+                      onChange={(e) => setField('bio', e.target.value)}
+                      onBlur={() => blurField('bio')}
+                      placeholder="What you build, what you're learning and what you want to work on next."
+                      aria-invalid={Boolean(fieldErrors.bio)}
+                      aria-describedby={fieldErrors.bio ? 'bio-error' : undefined}
+                      className={cn(inputBase, 'rounded-2xl px-4 py-3 resize-y leading-relaxed', fieldErrors.bio && 'border-warn')}
+                    />
+                  </FormField>
 
-              <div className="pt-2">
-                <Button type="submit" variant="primary" disabled={saving}>
-                  {saving ? 'Saving changes…' : 'Save profile'}
-                </Button>
-              </div>
+                  <FormField id="linkedin_url" label="LinkedIn profile URL" error={fieldErrors.linkedin_url}>
+                    <input
+                      id="linkedin_url"
+                      type="url"
+                      inputMode="url"
+                      value={form.linkedin_url}
+                      onChange={(e) => setField('linkedin_url', e.target.value)}
+                      onBlur={() => blurField('linkedin_url')}
+                      placeholder="https://www.linkedin.com/in/username"
+                      aria-invalid={Boolean(fieldErrors.linkedin_url)}
+                      aria-describedby={fieldErrors.linkedin_url ? 'linkedin_url-error' : undefined}
+                      className={cn(inputBase, 'h-11 rounded-full px-4', fieldErrors.linkedin_url && 'border-warn')}
+                    />
+                  </FormField>
+
+                  <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={!dirty || status === 'saving' || hasErrors}
+                      className="w-full sm:w-auto"
+                    >
+                      {status === 'saving' ? 'Saving profile…' : 'Save profile'}
+                    </Button>
+                    {dirty && status === 'idle' && (
+                      <Button
+                        type="button"
+                        variant="invisible"
+                        onClick={() => {
+                          setForm(saved);
+                          setFieldErrors({});
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        Discard changes
+                      </Button>
+                    )}
+                    <StatusLine status={status} message={message} />
+                  </div>
+                </>
+              )}
             </form>
           </CardContent>
         </Card>
       )}
 
-      {/* TAB 2: Account & Providers */}
+      {/* Account & providers */}
       {activeTab === 'account' && (
-        <Card>
-          <CardHeader title="Connected Identities" />
-          <CardContent className="space-y-4">
-            {/* GitHub */}
-            <div className="flex items-center justify-between p-3.5 rounded-[6px] border border-border bg-canvas">
-              <div className="flex items-center gap-3">
-                <MarkGithubIcon className="w-5 h-5 text-fg" />
-                <div>
-                  <div className="font-semibold text-fg text-[13px]">GitHub</div>
-                  <div className="text-[12px] text-fg-muted">
-                    {profile.github_connected
-                      ? `Connected as @${profile.github_username || profile.username}`
-                      : 'Not connected. Connect to import repos and verify ownership.'}
-                  </div>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader title="Sign-in" />
+            <CardContent>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex w-9 h-9 shrink-0 items-center justify-center rounded-full border border-line bg-paper">
+                  {provider === 'github.com' ? (
+                    <MarkGithubIcon className="w-4 h-4 text-ink" />
+                  ) : (
+                    <MailIcon className="w-4 h-4 text-ink" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[14.5px] font-semibold text-ink">{providerLabel}</p>
+                  <p className="text-[13px] text-muted break-all">
+                    {isDemo ? 'No email. Demo sessions are not linked to an account.' : profile.email || 'No email on this account.'}
+                  </p>
                 </div>
               </div>
-              <Badge variant={profile.github_connected ? 'success' : 'default'}>
-                {profile.github_connected ? 'Connected' : 'Disconnected'}
-              </Badge>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Google */}
-            <div className="flex items-center justify-between p-3.5 rounded-[6px] border border-border bg-canvas">
-              <div className="flex items-center gap-3">
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <div>
-                  <div className="font-semibold text-fg text-[13px]">Google</div>
-                  <div className="text-[12px] text-fg-muted">
-                    {profile.email || 'Email sign-in linked'}
-                  </div>
-                </div>
+          <Card>
+            <CardHeader
+              title="GitHub repository access"
+              action={
+                github === 'checking' ? (
+                  <Badge>Checking…</Badge>
+                ) : github === 'connected' ? (
+                  <Badge variant="success">Connected</Badge>
+                ) : github === 'disconnected' ? (
+                  <Badge>Not connected</Badge>
+                ) : (
+                  <Badge variant="attention">Status unavailable</Badge>
+                )
+              }
+            />
+            <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <MarkGithubIcon className="w-5 h-5 mt-0.5 text-ink shrink-0" />
+                <p className="text-[13.5px] text-muted max-w-[52ch]">
+                  {github === 'connected'
+                    ? 'Projust can read the repositories you granted, so you can import them as projects.'
+                    : github === 'unknown'
+                      ? "We couldn't check your GitHub connection. Refresh the page to try again."
+                      : 'Connect GitHub to import your repositories and prove you own them. This is separate from how you sign in.'}
+                </p>
               </div>
-              <Badge variant="success">Connected</Badge>
-            </div>
-          </CardContent>
-        </Card>
+              {github !== 'connected' && github !== 'checking' && (
+                <a href="/api/github/connect" className="pj-btn pj-btn-ghost shrink-0 w-full sm:w-auto">
+                  <MarkGithubIcon className="w-4 h-4" />
+                  Connect GitHub
+                </a>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      {/* TAB 3: Appearance */}
-      {activeTab === 'appearance' && (
-        <Card>
-          <CardHeader title="Appearance & Themes" />
-          <CardContent className="space-y-4">
-            <p className="text-[13px] text-fg-muted">
-              Select your color preference. Projust supports dark mode, light mode, or synchronization with your OS system preferences.
-            </p>
-            <div className="grid grid-cols-3 gap-3 max-w-md">
-              <button
-                type="button"
-                onClick={() => setTheme('dark')}
-                className={`flex flex-col items-center p-4 rounded-[6px] border text-center transition-colors ${
-                  theme === 'dark'
-                    ? 'border-accent bg-accent/10 text-fg'
-                    : 'border-border bg-canvas text-fg-muted hover:text-fg'
-                }`}
-              >
-                <MoonIcon className="w-5 h-5 mb-2" />
-                <span className="text-[13px] font-semibold">Dark Mode</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTheme('light')}
-                className={`flex flex-col items-center p-4 rounded-[6px] border text-center transition-colors ${
-                  theme === 'light'
-                    ? 'border-accent bg-accent/10 text-fg'
-                    : 'border-border bg-canvas text-fg-muted hover:text-fg'
-                }`}
-              >
-                <SunIcon className="w-5 h-5 mb-2" />
-                <span className="text-[13px] font-semibold">Light Mode</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTheme('system')}
-                className={`flex flex-col items-center p-4 rounded-[6px] border text-center transition-colors ${
-                  theme === 'system'
-                    ? 'border-accent bg-accent/10 text-fg'
-                    : 'border-border bg-canvas text-fg-muted hover:text-fg'
-                }`}
-              >
-                <span className="text-sm font-mono mb-2">⚙</span>
-                <span className="text-[13px] font-semibold">System</span>
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* TAB 4: Privacy */}
+      {/* Privacy */}
       {activeTab === 'privacy' && (
         <Card>
-          <CardHeader title="Profile & Project Visibility" />
+          <CardHeader title="Profile visibility" />
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="visibility" defaultChecked className="text-accent" />
-                <div>
-                  <span className="text-[13px] font-semibold text-fg">Public profile</span>
-                  <p className="text-[12px] text-fg-muted">
-                    Anyone with your profile link (/u/{profile.username}) can view verified scores and credentials.
-                  </p>
-                </div>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer pt-2">
-                <input type="radio" name="visibility" className="text-accent" />
-                <div>
-                  <span className="text-[13px] font-semibold text-fg">Link-only</span>
-                  <p className="text-[12px] text-fg-muted">
-                    Only recruiters or reviewers with explicit certificate URLs can view reports.
-                  </p>
-                </div>
-              </label>
+            <div className="flex items-start justify-between gap-6">
+              <div className="min-w-0">
+                <p id="public-label" className="text-[14.5px] font-semibold text-ink">
+                  Public profile
+                </p>
+                <p className="mt-1 text-[13.5px] text-muted max-w-[56ch]">
+                  {isPublic ? (
+                    <>
+                      Anyone with your link can see your verified scores and certificates at{' '}
+                      <span className="font-mono text-[12.5px] text-ink-2 break-all">/u/{profile.username}</span>.
+                    </>
+                  ) : (
+                    'Only you can see your profile. Certificate links you share still work.'
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isPublic}
+                aria-labelledby="public-label"
+                disabled={loading || privacyStatus === 'saving'}
+                onClick={togglePublic}
+                className={cn(
+                  'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40 disabled:opacity-50',
+                  isPublic ? 'bg-olive border-olive' : 'bg-paper border-line-2'
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-5 w-5 rounded-full bg-sheet shadow-sm transition-transform duration-200 ease-land',
+                    isPublic ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                  )}
+                />
+              </button>
             </div>
+            <StatusLine status={privacyStatus} message={privacyMessage} />
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function FormField({
+  id,
+  label,
+  hint,
+  error,
+  count,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: React.ReactNode;
+  error?: string;
+  count?: { value: number; max: number };
+  children: React.ReactNode;
+}) {
+  const over = count ? count.value > count.max : false;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <label htmlFor={id} className="text-[13.5px] font-medium text-ink">
+          {label}
+        </label>
+        {count && (
+          <span className={cn('text-[12px] tabular-nums', over ? 'text-warn' : 'text-muted')}>
+            {count.value}/{count.max}
+          </span>
+        )}
+      </div>
+      {children}
+      {error ? (
+        <p id={`${id}-error`} className="mt-1.5 text-[12.5px] text-warn">
+          {error}
+        </p>
+      ) : (
+        hint && (
+          <p id={`${id}-hint`} className="mt-1.5 text-[12.5px] text-muted">
+            {hint}
+          </p>
+        )
+      )}
+    </div>
+  );
+}
+
+function StatusLine({ status, message }: { status: SaveStatus; message: string | null }) {
+  if (!message || status === 'idle' || status === 'saving') return null;
+  const ok = status === 'saved';
+  return (
+    <p
+      role="status"
+      className={cn(
+        'flex items-start gap-1.5 text-[13px]',
+        ok ? 'text-pass' : status === 'blocked' ? 'text-ink-2' : 'text-warn'
+      )}
+    >
+      {ok ? <CheckIcon className="w-4 h-4 mt-px shrink-0" /> : <AlertIcon className="w-4 h-4 mt-px shrink-0" />}
+      <span>{message}</span>
+    </p>
+  );
+}
+
+function Notice({ tone, children }: { tone: 'info' | 'error'; children: React.ReactNode }) {
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'note'}
+      className={cn(
+        'flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-[13.5px]',
+        tone === 'error' ? 'bg-[#FDECEC] border-[#F5CFCF] text-[#B4232C]' : 'bg-lime-soft border-[#DCEB9E] text-ink-2'
+      )}
+    >
+      <AlertIcon className="w-4 h-4 mt-0.5 shrink-0" />
+      <div>{children}</div>
     </div>
   );
 }
