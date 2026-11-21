@@ -1,4 +1,4 @@
-import { withUsage, withUsageSync } from '@/lib/ai/usage';
+import { recordUsage, withUsage, withUsageSync } from '@/lib/ai/usage';
 import { NextResponse } from 'next/server';
 import { streamText } from 'ai';
 import { generateJSON } from '@/lib/brain/llm';
@@ -212,7 +212,10 @@ ${question}`;
       model: llmModel,
       system: ASK_SYSTEM_PROMPT,
       prompt: userPrompt,
-      onFinish: ({ text }) => saveAnswer(text),
+      onFinish: ({ text, usage, response }) => {
+        recordUsage(response?.modelId || 'fallback', { input_tokens: usage?.inputTokens, output_tokens: usage?.outputTokens, cache_read_input_tokens: usage?.inputTokenDetails?.cacheReadTokens }, 'tutor');
+        return saveAnswer(text);
+      },
     });
 
     return result.toTextStreamResponse({

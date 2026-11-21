@@ -2,6 +2,7 @@ import { generateText } from 'ai';
 import { z } from 'zod';
 import { llmModel, llmFastModel, hasNonClaudeBackend } from '@/lib/ai/provider';
 import { claudeJSON, isClaudeConfigured } from '@/lib/ai/claude';
+import { recordUsage } from '@/lib/ai/usage';
 
 /**
  * Ask the model for JSON matching a zod schema.
@@ -41,7 +42,7 @@ ${jsonSchema}`;
   const tries = (opts.retries ?? 2) + 1;
 
   for (let attempt = 0; attempt < tries; attempt++) {
-    const { text } = await generateText({
+    const { text, usage, response } = await generateText({
       model: opts.fast ? llmFastModel : llmModel,
       system,
       prompt,
@@ -49,6 +50,11 @@ ${jsonSchema}`;
       // Reasoning models spend output tokens thinking before the answer; leave them room.
       maxOutputTokens: Math.min(32000, (opts.maxOutputTokens ?? 4096) * 2 + 2000),
       maxRetries: 2,
+    });
+    recordUsage(response?.modelId || 'fallback', {
+      input_tokens: usage?.inputTokens,
+      output_tokens: usage?.outputTokens,
+      cache_read_input_tokens: usage?.inputTokenDetails?.cacheReadTokens,
     });
 
     let raw = extractJson(text);
