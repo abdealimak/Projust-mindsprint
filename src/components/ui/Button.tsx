@@ -59,11 +59,14 @@ export function ButtonLink({
   children?: React.ReactNode;
 } & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const base =
-    'inline-flex items-center justify-center gap-2 rounded-full font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40';
+    'inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap border ' +
+    'transition-[transform,box-shadow,background-color,color] duration-200 ease-land active:scale-[0.97]';
   const variants: Record<string, string> = {
-    primary: 'bg-neutral-900 text-white hover:bg-black dark:bg-white dark:text-neutral-900',
-    secondary: 'border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white',
-    quiet: 'text-neutral-900 dark:text-white hover:opacity-80',
+    primary:
+      'bg-ink border-ink text-paper hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,.45)]',
+    secondary:
+      'bg-sheet border-line text-ink hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-12px_rgba(0,0,0,.25)]',
+    quiet: 'border-transparent text-ink hover:bg-sheet',
   };
   const sizes: Record<string, string> = {
     md: 'h-11 px-5 text-[15px]',

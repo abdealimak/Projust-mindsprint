@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'attention' | 'danger' | 'accent' | 'purple';
+  variant?: 'default' | 'success' | 'attention' | 'danger' | 'accent' | 'purple' | 'muted' | 'olive';
   size?: 'sm' | 'md';
   className?: string;
 }
@@ -17,6 +17,8 @@ export function Badge({ children, variant = 'default', size = 'sm', className }:
     danger: 'bg-[#FDECEC] text-[#B4232C] border-[#F5CFCF]',
     accent: 'bg-lime text-ink border-[#B9D84A]',
     purple: 'bg-[#FFE6D9] text-[#963A12] border-[#FFCBB0]',
+    muted: 'bg-paper text-muted border-line',
+    olive: 'bg-olive text-[#F6F8EC] border-olive',
   };
 
   const sizes = {

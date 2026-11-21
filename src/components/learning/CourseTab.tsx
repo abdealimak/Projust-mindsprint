@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clock, RefreshCw } from 'lucide-react';
+import { Check, Clock, RefreshCw, ArrowLeft, ArrowRight, ChevronDown, BookOpen, FileCode, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Misc';
 import type { CodeRef, Course, Lesson } from '@/types/learning';
-import { api, ApiError, usePoll, CodeRefChip, Markdown, StateCard, ErrorNote, Spinner } from './shared';
+import { api, ApiError, usePoll, CodeRefChip, Markdown, StateCard, ErrorNote, Spinner, Bar } from './shared';
 import { loadErrorText } from './shared';
 
 type Level = 'beginner' | 'intermediate' | 'advanced';
@@ -98,6 +98,7 @@ export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz
     if (!conceptsReady) {
       return (
         <StateCard
+          icon={<BookOpen className="w-5 h-5" />}
           title="Map the concepts"
           em="before the course."
           body={<p>Each lesson teaches one part of the concept map and quotes the lines it comes from. Map the concepts first, then come back here.</p>}
@@ -131,7 +132,7 @@ export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz
                   className={cn(
                     'relative flex flex-col gap-1 p-4 rounded-[12px] border cursor-pointer transition-colors duration-200',
                     'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[var(--orange)]',
-                    level === l.value ? 'border-ink bg-paper' : 'border-line hover:border-line-2'
+                    level === l.value ? 'border-ink bg-paper-2 shadow-[0_0_0_3px_#CDEB5A]' : 'border-line hover:border-line-2'
                   )}
                 >
                   <input
@@ -142,7 +143,18 @@ export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz
                     onChange={() => setLevel(l.value)}
                     className="sr-only"
                   />
-                  <span className="text-[15px] font-medium">{l.label}</span>
+                  <span className="flex items-center justify-between gap-2 text-[15px] font-medium">
+                    {l.label}
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'w-[18px] h-[18px] rounded-full border-[1.5px] grid place-items-center',
+                        level === l.value ? 'bg-ink border-ink' : 'border-line-2'
+                      )}
+                    >
+                      {level === l.value && <span className="w-1.5 h-1.5 rounded-full bg-paper" />}
+                    </span>
+                  </span>
                   <span className="text-[13px] text-muted">{l.hint}</span>
                 </label>
               ))}
@@ -193,6 +205,7 @@ export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz
   );
 }
 
+
 function CourseReader({
   projectId,
   course,
@@ -220,18 +233,23 @@ function CourseReader({
   const [lessonId, setLessonId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const readerRef = useRef<HTMLDivElement>(null);
 
   const current: Lesson | undefined =
     lessons.find((l) => l.id === lessonId) || lessons.find((l) => !done.has(l.id)) || lessons[0];
   const idx = current ? lessons.findIndex((l) => l.id === current.id) : -1;
+  const moduleIdx = current ? course.modules.findIndex((m) => m.lessons.some((l) => l.id === current.id)) : -1;
   const doneCount = lessons.filter((l) => done.has(l.id)).length;
   const pct = lessons.length ? Math.round((doneCount / lessons.length) * 100) : 0;
   const allDone = !generating && lessons.length > 0 && doneCount === lessons.length;
+  const minutesLeft = lessons.filter((l) => !done.has(l.id)).reduce((t, l) => t + (l.minutes || 0), 0);
+  const isDone = !!current && done.has(current.id);
 
   const select = (id: string) => {
     setLessonId(id);
     setSaveError(null);
+    setOutlineOpen(false);
     requestAnimationFrame(() => {
       const el = readerRef.current;
       if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: 'start' });
@@ -264,81 +282,111 @@ function CourseReader({
   return (
     <div className="space-y-4">
       {actionError && <ErrorNote message={actionError} />}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
         {/* Outline */}
         <nav aria-label="Course outline" className="pj-card overflow-hidden lg:sticky lg:top-6">
           <div className="p-5 border-b border-line">
-            <h3 className="font-serif text-[24px] leading-tight">{course.title || 'Your course'}</h3>
+            <p className="text-[12.5px] text-muted">Course</p>
+            <h3 className="font-serif text-[24px] leading-[1.1] mt-0.5">{course.title || 'Your course'}</h3>
             {generating ? (
-              <div className="mt-3" aria-live="polite">
+              <div className="mt-4" aria-live="polite">
                 <div className="flex items-center gap-2 text-[13.5px] text-muted">
                   <Spinner className="w-3.5 h-3.5" />
                   <span className="truncate">{course.status_detail || 'Writing lessons…'}</span>
                 </div>
-                <div className="mt-2 h-[3px] bg-line rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-ink rounded-full transition-[width] duration-300 ease-land"
-                    style={{ width: `${Math.max(3, Math.round((course.progress || 0) * 100))}%` }}
-                  />
-                </div>
+                <Bar className="mt-2" value={Math.max(3, Math.round((course.progress || 0) * 100))} label="Course writing progress" />
               </div>
             ) : (
-              <div className="mt-3">
-                <div className="flex justify-between text-[13px] text-muted">
+              <div className="mt-4">
+                <div className="flex items-baseline justify-between text-[13px] text-muted">
                   <span>
-                    {doneCount} of {lessons.length} lessons done
+                    <span className="text-ink font-medium tabular-nums">{doneCount}</span> of {lessons.length} lessons done
                   </span>
                   <span className="tabular-nums">{pct}%</span>
                 </div>
-                <div className="mt-2 h-[3px] bg-line rounded-full overflow-hidden">
-                  <div className="h-full bg-ink rounded-full transition-[width] duration-300 ease-land" style={{ width: `${pct}%` }} />
-                </div>
+                <Bar className="mt-2" value={pct} tone={allDone ? 'pass' : 'ink'} label="Lessons completed" />
+                {!allDone && minutesLeft > 0 && <p className="mt-2 text-[12.5px] text-muted">About {minutesLeft} min left</p>}
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setOutlineOpen((o) => !o)}
+              aria-expanded={outlineOpen}
+              aria-controls="course-outline-list"
+              className="lg:hidden mt-4 w-full flex items-center justify-between h-10 px-4 rounded-full border border-line text-[14px] font-medium hover:border-line-2 cursor-pointer"
+            >
+              {outlineOpen ? 'Hide lessons' : `All lessons${current ? `: now on ${idx + 1} of ${lessons.length}` : ''}`}
+              <ChevronDown className={cn('w-4 h-4 transition-transform duration-200', outlineOpen && 'rotate-180')} aria-hidden="true" />
+            </button>
           </div>
-          <ol className="max-h-[50vh] lg:max-h-[calc(100vh-260px)] overflow-y-auto py-2">
-            {course.modules.map((m, mi) => (
-              <li key={m.id} className="px-3 py-2">
-                <div className="px-2 pb-1 text-[12.5px] text-muted">
-                  Module {mi + 1}
-                  <span className="block text-[14px] text-ink font-medium leading-snug">{m.title}</span>
-                </div>
-                <ol>
-                  {m.lessons.map((l) => {
-                    const isCur = current?.id === l.id;
-                    const isDone = done.has(l.id);
-                    return (
-                      <li key={l.id}>
-                        <button
-                          type="button"
-                          onClick={() => select(l.id)}
-                          aria-current={isCur ? 'true' : undefined}
-                          className={cn(
-                            'w-full text-left flex items-start gap-2.5 px-2 py-2 rounded-[10px] text-[14px] transition-colors duration-200 cursor-pointer',
-                            isCur ? 'bg-paper text-ink' : 'text-ink-2 hover:bg-paper'
-                          )}
-                        >
-                          <span
-                            aria-hidden="true"
+          <ol
+            id="course-outline-list"
+            className={cn('max-h-[60vh] lg:max-h-[calc(100vh-320px)] overflow-y-auto py-2', !outlineOpen && 'hidden lg:block')}
+          >
+            {course.modules.map((m, mi) => {
+              const mDone = m.lessons.filter((l) => done.has(l.id)).length;
+              const complete = m.lessons.length > 0 && mDone === m.lessons.length;
+              return (
+                <li key={m.id} className="px-3 py-2">
+                  <div className="flex items-start gap-2.5 px-2 pb-1.5">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'mt-[1px] w-6 h-6 shrink-0 rounded-full grid place-items-center text-[12px] tabular-nums border',
+                        complete ? 'bg-[#E6F5D0] border-[#CFE6AE] text-[#3F6212]' : mi === moduleIdx ? 'bg-lime border-[#B9D84A] text-ink' : 'bg-paper-2 border-line text-muted'
+                      )}
+                    >
+                      {complete ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : mi + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] text-muted">
+                        Module {mi + 1}
+                        <span className="sr-only">{complete ? ', complete' : ''}</span>
+                      </span>
+                      <span className="block text-[14px] text-ink font-medium leading-snug">{m.title}</span>
+                    </span>
+                    <span className="shrink-0 text-[12px] text-muted tabular-nums mt-[1px]">
+                      {mDone}/{m.lessons.length}
+                    </span>
+                  </div>
+                  <ol className="ml-[22px] pl-3 border-l border-line">
+                    {m.lessons.map((l) => {
+                      const isCur = current?.id === l.id;
+                      const lDone = done.has(l.id);
+                      return (
+                        <li key={l.id}>
+                          <button
+                            type="button"
+                            onClick={() => select(l.id)}
+                            aria-current={isCur ? 'true' : undefined}
                             className={cn(
-                              'mt-[2px] w-[18px] h-[18px] shrink-0 rounded-full border grid place-items-center',
-                              isDone ? 'bg-[#E6F5D0] border-[#CFE6AE] text-[#3F6212]' : 'border-line-2'
+                              'relative w-full text-left flex items-start gap-2.5 px-2.5 py-2 rounded-[10px] text-[14px] transition-colors duration-200 cursor-pointer',
+                              isCur ? 'bg-paper text-ink' : 'text-ink-2 hover:bg-paper-2'
                             )}
                           >
-                            {isDone && <Check className="w-3 h-3" strokeWidth={2.5} />}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className={cn('block leading-snug', isCur && 'font-medium')}>{l.title}</span>
-                            <span className="sr-only">{isDone ? ' (done)' : ''}</span>
-                          </span>
-                          <span className="shrink-0 text-[12px] text-muted tabular-nums">{l.minutes} min</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </li>
-            ))}
+                            {isCur && <span aria-hidden="true" className="absolute -left-[13.5px] top-2 bottom-2 w-[2px] rounded-full bg-ink" />}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                'mt-[2px] w-[18px] h-[18px] shrink-0 rounded-full border grid place-items-center',
+                                lDone ? 'bg-[#3F7F1F] border-[#3F7F1F] text-white' : isCur ? 'border-ink' : 'border-line-2'
+                              )}
+                            >
+                              {lDone && <Check className="w-3 h-3" strokeWidth={3} />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={cn('block leading-snug', isCur && 'font-medium', lDone && !isCur && 'text-muted')}>{l.title}</span>
+                              <span className="sr-only">{lDone ? ' (done)' : ''}</span>
+                            </span>
+                            <span className="shrink-0 text-[12px] text-muted tabular-nums">{l.minutes} min</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </li>
+              );
+            })}
             {generating && (
               <li className="px-5 py-3 space-y-2" aria-hidden="true">
                 <Skeleton className="h-4 w-32" />
@@ -347,8 +395,8 @@ function CourseReader({
             )}
           </ol>
           {!generating && (
-            <div className="px-5 py-3 border-t border-line">
-              <Button size="sm" variant="invisible" onClick={onRegenerate} disabled={regenerating} icon={<RefreshCw className="w-3.5 h-3.5" />} className="-ml-3">
+            <div className={cn('px-5 py-3 border-t border-line', !outlineOpen && 'hidden lg:block')}>
+              <Button size="sm" variant="invisible" onClick={onRegenerate} disabled={regenerating} icon={regenerating ? <Spinner className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />} className="-ml-3">
                 Rebuild course
               </Button>
             </div>
@@ -356,10 +404,15 @@ function CourseReader({
         </nav>
 
         {/* Reader */}
-        <div ref={readerRef} className="min-w-0 scroll-mt-6">
+        <div ref={readerRef} className="min-w-0 scroll-mt-6 space-y-4">
           {allDone && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-5 py-4 rounded-m border border-[#B9D84A] bg-lime-soft">
-              <p className="text-[15px] text-ink">You finished every lesson. Take the quiz to earn the certificate.</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 rounded-m border border-[#B9D84A] bg-lime-soft">
+              <p className="text-[15px] text-ink flex items-center gap-2.5">
+                <span aria-hidden="true" className="w-7 h-7 rounded-full bg-[#3F7F1F] text-white grid place-items-center shrink-0">
+                  <Check className="w-4 h-4" strokeWidth={2.5} />
+                </span>
+                You finished every lesson. Take the quiz to earn the certificate.
+              </p>
               <Button variant="primary" size="sm" onClick={onGoToQuiz}>
                 Take the quiz
               </Button>
@@ -374,39 +427,65 @@ function CourseReader({
               <Skeleton className="h-4 w-4/6" />
             </div>
           ) : (
-            <article key={current.id} className="pj-card p-6 sm:p-10 lg:p-12">
-              <div className="max-w-[68ch]">
-                <div className="flex items-center gap-3 text-[13px] text-muted">
-                  <span>
-                    Lesson {idx + 1} of {lessons.length}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {current.minutes} min
-                  </span>
-                </div>
-                <h2 className="pj-display text-[clamp(32px,3.4vw,44px)] mt-3">{current.title}</h2>
-
-                {current.code_refs.length > 0 && (
-                  <div className="mt-5 flex flex-wrap gap-1.5" aria-label="Code this lesson quotes">
-                    {current.code_refs.map((r, i) => (
-                      <CodeRefChip key={`${r.path}-${i}`} codeRef={r} onOpen={onOpenFile} />
-                    ))}
+            <article key={current.id} className="pj-card overflow-hidden" aria-labelledby={`lesson-${current.id}`}>
+              <header className="px-6 sm:px-10 lg:px-12 pt-6 sm:pt-10 pb-6 border-b border-line">
+                <div className="max-w-[68ch]">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-muted">
+                    {moduleIdx >= 0 && (
+                      <span className="text-ink-2">
+                        Module {moduleIdx + 1}: {course.modules[moduleIdx].title}
+                      </span>
+                    )}
+                    <span aria-hidden="true" className="w-1 h-1 rounded-full bg-line-2" />
+                    <span className="tabular-nums">
+                      Lesson {idx + 1} of {lessons.length}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                      {current.minutes} min read
+                    </span>
+                    {isDone && (
+                      <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-[#E6F5D0] border border-[#CFE6AE] text-[#3F6212] text-[12px] font-medium">
+                        <Check className="w-3 h-3" strokeWidth={3} aria-hidden="true" />
+                        Done
+                      </span>
+                    )}
                   </div>
-                )}
+                  <h2 id={`lesson-${current.id}`} className="pj-display text-[clamp(32px,3.4vw,46px)] mt-3 text-balance">
+                    {current.title}
+                  </h2>
 
-                <Markdown size="read" className="mt-7">
+                  {current.code_refs.length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-[12.5px] text-muted mb-2 inline-flex items-center gap-1.5">
+                        <FileCode className="w-3.5 h-3.5" aria-hidden="true" />
+                        Code this lesson reads. Click to open it.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {current.code_refs.map((r, i) => (
+                          <CodeRefChip key={`${r.path}-${i}`} codeRef={r} onOpen={onOpenFile} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </header>
+
+              <div className="px-6 sm:px-10 lg:px-12 py-8">
+                <Markdown size="read" onOpenRef={onOpenFile}>
                   {current.body_md}
                 </Markdown>
 
                 {current.check_questions.length > 0 && (
-                  <section className="mt-10 pt-6 border-t border-line">
-                    <h3 className="font-serif text-[24px]">Check yourself</h3>
-                    <p className="text-[14px] text-muted mt-1">Answer these in your head before moving on. The quiz asks similar things.</p>
-                    <ol className="mt-4 space-y-2.5">
+                  <section className="mt-10 max-w-[68ch] rounded-[16px] border border-line bg-paper-2 p-5 sm:p-6">
+                    <h3 className="font-serif text-[24px] leading-tight">Check yourself</h3>
+                    <p className="text-[14px] text-muted mt-1">
+                      Answer these out loud or on paper before moving on. The quiz asks similar things.
+                    </p>
+                    <ol className="mt-4 space-y-2">
                       {current.check_questions.map((q, i) => (
-                        <li key={i} className="flex gap-3 text-[16px] leading-[1.55]">
-                          <span className="shrink-0 font-serif text-[20px] leading-[1.2] text-muted w-5 text-right">{i + 1}</span>
+                        <li key={i} className="flex gap-3 rounded-[12px] bg-sheet border border-line px-4 py-3 text-[15.5px] leading-[1.55]">
+                          <span className="shrink-0 font-serif text-[20px] leading-[1.15] text-muted w-5 text-right tabular-nums">{i + 1}</span>
                           <span>{q}</span>
                         </li>
                       ))}
@@ -415,38 +494,52 @@ function CourseReader({
                 )}
 
                 {saveError && (
-                  <div className="mt-6">
+                  <div className="mt-6 max-w-[68ch]">
                     <ErrorNote message={saveError} onRetry={() => toggleDone(current)} />
                   </div>
                 )}
-
-                <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-                  <Button
-                    variant="invisible"
-                    size="sm"
-                    disabled={idx <= 0}
-                    onClick={() => idx > 0 && select(lessons[idx - 1].id)}
-                    className="-ml-3"
-                  >
-                    Previous lesson
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    {done.has(current.id) ? (
-                      <Button onClick={() => toggleDone(current)} disabled={saving || generating}>
-                        <Check className="w-4 h-4 text-[#3F6212]" />
-                        Done. Mark as not done
-                      </Button>
-                    ) : (
-                      <Button variant="primary" onClick={() => toggleDone(current)} disabled={saving || generating}>
-                        Mark lesson done
-                      </Button>
-                    )}
-                    {idx < lessons.length - 1 && (
-                      <Button onClick={() => select(lessons[idx + 1].id)}>Next lesson</Button>
-                    )}
-                  </div>
-                </div>
               </div>
+
+              <footer className="flex flex-wrap items-center gap-3 px-6 sm:px-10 lg:px-12 py-4 border-t border-line bg-paper-2">
+                <Button
+                  variant="invisible"
+                  size="sm"
+                  disabled={idx <= 0}
+                  onClick={() => idx > 0 && select(lessons[idx - 1].id)}
+                  className="-ml-3"
+                  icon={<ArrowLeft className="w-3.5 h-3.5" />}
+                >
+                  <span className="hidden sm:inline">Previous</span>
+                  <span className="sm:hidden">Back</span>
+                </Button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {isDone ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 text-[14px] text-[#3F6212] font-medium" role="status">
+                        <Check className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+                        Marked done
+                      </span>
+                      <Button size="sm" variant="invisible" onClick={() => toggleDone(current)} disabled={saving || generating} icon={<Undo2 className="w-3.5 h-3.5" />}>
+                        Undo
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="primary" onClick={() => toggleDone(current)} disabled={saving || generating}>
+                      {saving ? <Spinner /> : <Check className="w-4 h-4" strokeWidth={2.5} />}
+                      {saving ? 'Saving…' : idx < lessons.length - 1 ? 'Mark done and continue' : 'Mark done'}
+                    </Button>
+                  )}
+                  {idx < lessons.length - 1 ? (
+                    <Button onClick={() => select(lessons[idx + 1].id)} icon={<ArrowRight className="w-4 h-4" />} className="flex-row-reverse">
+                      Next
+                    </Button>
+                  ) : allDone ? (
+                    <Button variant="primary" onClick={onGoToQuiz}>
+                      Take the quiz
+                    </Button>
+                  ) : null}
+                </div>
+              </footer>
             </article>
           )}
         </div>

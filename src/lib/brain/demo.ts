@@ -20,6 +20,8 @@ import { aspectScores, average, isUnlocked } from './score';
 export const DEMO_PROJECT_ID = 'proj_1';
 export const DEMO_REPO = 'alexchen-dev/shop-api';
 export const SAMPLE_CERT_CODE = 'PJ-2026-A7X9K2';
+/** The certificate shown on the landing page (its own sample student, Aarav / shopkart). */
+export const LANDING_CERT_CODE = 'PJ-2026-K3M8Q4';
 /** Landing-page sample scores (average 71). */
 export const SAMPLE_SCORES: AspectScores = {
   concept_understanding: 78,
@@ -391,7 +393,7 @@ export function sampleCertificate(): LearningCertificate {
     concepts: DEMO_CONCEPTS.map((c, i) => ({ name: c.name, category: c.category, strength: i % 3 === 0 ? 'advanced' : 'proficient' })),
     version: 2,
     history: [
-      { version: 1, overall: 49, scores: { concept_understanding: 52, code_comprehension: 48, debugging: 38, architecture_design: 55, security_best_practices: 41, ai_collaboration: 60 }, commit_sha: '91c0e2f', at: '2026-03-02T10:00:00Z' },
+      { version: 1, overall: 62, scores: { concept_understanding: 66, code_comprehension: 62, debugging: 50, architecture_design: 64, security_best_practices: 52, ai_collaboration: 78 }, commit_sha: '91c0e2f', at: '2026-03-02T10:00:00Z' },
       { version: 2, overall: average(SAMPLE_SCORES), scores: SAMPLE_SCORES, commit_sha: 'a8b34c1', at: '2026-03-09T16:20:00Z' },
     ],
     issued_at: '2026-03-02T10:00:00Z',
@@ -470,4 +472,67 @@ export function demoProjectFiles() {
     line_count: f.content.split('\n').length,
     content: f.content,
   }));
+}
+
+/**
+ * Demo tutor: a canned, grounded answer for the sample repo (no AI call). Picks the concepts
+ * whose words match the question and cites their lines in the [[path:a-b]] format the UI renders.
+ */
+export function demoTutorAnswer(question: string): string {
+  const words = Array.from(new Set(question.toLowerCase().match(/[a-z]{4,}/g) || []));
+  const scored = DEMO_CONCEPTS.map((c) => {
+    const text = `${c.name} ${c.key} ${c.category} ${c.description}`.toLowerCase();
+    let score = 0;
+    for (const w of words) if (text.includes(w)) score++;
+    return { c, score };
+  }).sort((a, b) => b.score - a.score);
+  const picked = scored[0].score > 0 ? scored.filter((s) => s.score > 0).slice(0, 2).map((s) => s.c) : [DEMO_CONCEPTS[2], DEMO_CONCEPTS[3]];
+
+  const parts = picked.map((c) => {
+    const f = c.files[0];
+    return `**${c.name}.** ${c.description} [[${f.path}:${f.startLine}-${f.endLine}]]`;
+  });
+  return [
+    `Here is how that works in \`alexchen-dev/shop-api\`:`,
+    ...parts,
+    `Try this: open the cited lines and ask yourself what would break if that check were removed. That's the kind of question the quiz asks.`,
+    `_Demo mode: this answer comes from the sample project's concept map, not a live model._`,
+  ].join('\n\n');
+}
+
+/** Matches the certificate drawn on the landing page exactly (names, scores, versions, dates). */
+export function landingSampleCertificate(): LearningCertificate {
+  const sc = (a: number[]): AspectScores => ({
+    concept_understanding: a[0], code_comprehension: a[1], debugging: a[2],
+    architecture_design: a[3], security_best_practices: a[4], ai_collaboration: a[5],
+  });
+  const v1 = sc([66, 62, 50, 64, 52, 78]);
+  const v2 = sc([72, 68, 52, 67, 57, 80]);
+  return {
+    code: LANDING_CERT_CODE,
+    recipient_name: 'Aarav Mehta',
+    repo_full_name: 'aarav/shopkart',
+    project_id: 'sample-shopkart',
+    commit_sha: '3f9a1c2',
+    level: 'Course-verified',
+    scores: SAMPLE_SCORES,
+    overall: average(SAMPLE_SCORES),
+    ownership_pct: 82,
+    concepts: [
+      { name: 'JWT auth', category: 'Security', strength: 'master' },
+      { name: 'Idempotent webhooks', category: 'Payments', strength: 'master' },
+      { name: 'Row-level security', category: 'Security', strength: 'advanced' },
+      { name: 'Server actions', category: 'Architecture', strength: 'advanced' },
+      { name: 'Input validation', category: 'API', strength: 'proficient' },
+    ],
+    version: 3,
+    history: [
+      { version: 1, overall: average(v1), scores: v1, commit_sha: '3f9a1c2', at: '2026-11-02T10:00:00Z' },
+      { version: 2, overall: average(v2), scores: v2, commit_sha: '3f9a1c2', at: '2026-11-10T10:00:00Z' },
+      { version: 3, overall: average(SAMPLE_SCORES), scores: SAMPLE_SCORES, commit_sha: '3f9a1c2', at: '2026-11-18T10:00:00Z' },
+    ],
+    issued_at: '2026-11-02T10:00:00Z',
+    updated_at: '2026-11-18T10:00:00Z',
+    sample: true,
+  };
 }

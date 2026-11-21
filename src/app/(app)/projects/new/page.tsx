@@ -9,12 +9,23 @@ import {
   Search,
   ExternalLink,
   Link as LinkIcon,
-  AlertCircle,
   Plus,
   Loader2,
+  GitFork,
 } from 'lucide-react';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { Page, PageHeader } from '@/components/layout/PageHeader';
+import { Callout, Skeleton } from '@/components/ui/Misc';
+import { GitHubMark } from '@/components/ui/Button';
 import { connectGitHubAccount } from '@/lib/firebase/auth';
+import { cn } from '@/lib/utils';
+
+const GITHUB_REPO_RE = /^https?:\/\/(www\.)?github\.com\/[^/\s]+\/[^/\s]+/i;
+
+const AFTER_IMPORT = [
+  { title: 'We read the code', body: 'A summary of what it does and the files that matter.' },
+  { title: 'We check it is yours', body: 'Your share of the commits, so the certificate means something.' },
+  { title: 'You learn and get scored', body: 'Concepts, a course from your code, then a quiz on six skills.' },
+];
 
 interface RepoItem {
   id: number;
@@ -140,265 +151,359 @@ export default function NewProjectPage() {
     );
   });
 
+  const trimmedUrl = publicUrl.trim();
+  const urlLooksWrong = trimmedUrl.length > 0 && !GITHUB_REPO_RE.test(trimmedUrl);
+
   return (
-    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1040px] mx-auto w-full space-y-6">
+    <Page narrow>
       <PageHeader
-        className="mb-2"
         eyebrow="Import"
         title="Bring a repository."
         em="We'll read it with you."
-        description="Pick one from your GitHub account or paste any public GitHub link. We index the code, check your commit share and write a summary."
+        description="Pick one from your GitHub account or paste any public GitHub link. We index the code, check your share of the commits and write a summary."
       />
 
-      {errorMsg && (
-        <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-8 lg:gap-10 items-start">
+        <div className="min-w-0 space-y-5">
+          {/* Tabs */}
+          <div role="tablist" aria-label="How to import" className="pj-segment w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+            <button
+              type="button"
+              role="tab"
+              id="tab-picker"
+              aria-selected={activeTab === 'picker'}
+              aria-controls="panel-picker"
+              onClick={() => setActiveTab('picker')}
+            >
+              <FolderGit2 className="w-4 h-4 hidden sm:block" aria-hidden />
+              <span className="sm:hidden">Your repos</span>
+              <span className="hidden sm:inline">Your GitHub repositories</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-url"
+              aria-selected={activeTab === 'url'}
+              aria-controls="panel-url"
+              onClick={() => setActiveTab('url')}
+            >
+              <LinkIcon className="w-4 h-4 hidden sm:block" aria-hidden />
+              <span className="sm:hidden">Paste a link</span>
+              <span className="hidden sm:inline">Paste a public link</span>
+            </button>
+          </div>
 
-      {/* Tabs */}
-      <div className="inline-flex p-1 gap-0.5 rounded-full border border-line bg-sheet text-[14px] font-medium">
-        <button
-          type="button"
-          onClick={() => setActiveTab('picker')}
-          className={`flex items-center gap-2 h-9 px-4 rounded-full transition-colors ${
-            activeTab === 'picker'
-              ? 'bg-olive text-[#F6F8EC] shadow-pill'
-              : 'text-ink-2 hover:bg-paper'
-          }`}
-        >
-          <FolderGit2 className="w-4 h-4" />
-          <span>Your GitHub Repositories</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('url')}
-          className={`flex items-center gap-2 h-9 px-4 rounded-full transition-colors ${
-            activeTab === 'url'
-              ? 'bg-olive text-[#F6F8EC] shadow-pill'
-              : 'text-ink-2 hover:bg-paper'
-          }`}
-        >
-          <LinkIcon className="w-4 h-4" />
-          <span>Paste Public Repo URL</span>
-        </button>
-      </div>
-
-      {/* Tab 1: Repo Picker */}
-      {activeTab === 'picker' && (
-        <div className="space-y-4">
-          {loading ? (
-            <div className="p-12 text-center text-xs text-neutral-400 animate-pulse">
-              Loading your GitHub repositories...
-            </div>
-          ) : !connected ? (
-            /* Connect GitHub State */
-            <div className="p-8 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#161a26] text-center space-y-4 max-w-lg mx-auto">
-              <div className="w-12 h-12 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto text-neutral-900 dark:text-white">
-                <FolderGit2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
-                  Connect GitHub for Repo Access
-                </h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
-                  Authorize Projust to read repository trees and commit histories so you can audit real codebases and earn certified rubrics.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          {errorMsg && (
+            <Callout
+              tone="error"
+              title="That didn't work"
+              action={
                 <button
                   type="button"
-                  disabled={connecting}
-                  onClick={() => handleConnectGitHub('public')}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  onClick={() => setErrorMsg(null)}
+                  className="text-[13px] font-medium underline underline-offset-2"
                 >
-                  {connecting ? (
+                  Dismiss
+                </button>
+              }
+            >
+              {errorMsg}
+            </Callout>
+          )}
+
+          {/* Tab 1: Repo Picker */}
+          {activeTab === 'picker' && (
+            <div role="tabpanel" id="panel-picker" aria-labelledby="tab-picker">
+              {loading ? (
+                <div className="pj-card divide-y divide-line overflow-hidden" aria-busy="true" aria-label="Loading your GitHub repositories">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="p-4 sm:p-5 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-4 w-48 max-w-full" />
+                        <Skeleton className="h-3 w-72 max-w-full" />
+                      </div>
+                      <Skeleton className="h-9 w-20 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : !connected ? (
+                /* Connect GitHub State */
+                <div className="pj-card px-5 py-10 sm:px-10 sm:py-12 text-center">
+                  <span className="mx-auto w-12 h-12 rounded-[14px] grid place-items-center bg-paper border border-line text-ink">
+                    <GitHubMark className="w-6 h-6" />
+                  </span>
+                  <h2 className="mt-4 font-serif text-[30px] leading-tight">Connect GitHub</h2>
+                  <p className="mt-2 text-[15px] text-muted max-w-[46ch] mx-auto">
+                    Projust reads the file tree and commit history of the repos you pick, so it can check which parts you
+                    wrote. Nothing is imported until you choose a repo.
+                  </p>
+
+                  <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      disabled={connecting}
+                      onClick={() => handleConnectGitHub('public')}
+                      className="pj-btn"
+                    >
+                      {connecting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                          Connecting…
+                        </>
+                      ) : (
+                        <>
+                          <GitHubMark className="w-4 h-4" />
+                          Connect public repos
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={connecting}
+                      onClick={() => handleConnectGitHub('private')}
+                      className="pj-btn pj-btn-ghost"
+                    >
+                      <Lock className="w-4 h-4" aria-hidden />
+                      Include private repos
+                    </button>
+                  </div>
+
+                  <p className="mt-6 text-[13.5px] text-muted">
+                    Rather not connect?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('url')}
+                      className="text-ink font-medium underline underline-offset-2"
+                    >
+                      Paste a public link instead
+                    </button>
+                  </p>
+                </div>
+              ) : (
+                /* Search & Repo List */
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden />
+                      <label htmlFor="repo-search" className="sr-only">
+                        Search repositories
+                      </label>
+                      <input
+                        id="repo-search"
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search repositories"
+                        className="pj-input pl-10"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-4 text-[13.5px] text-muted">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={hideForks}
+                          onChange={(e) => setHideForks(e.target.checked)}
+                          className="w-4 h-4 rounded border-line-2 accent-[#4A5A1E]"
+                        />
+                        Hide forks
+                      </label>
+                      <span className="tabular-nums" aria-live="polite">
+                        {filteredRepos.length} {filteredRepos.length === 1 ? 'repository' : 'repositories'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="pj-card divide-y divide-line overflow-hidden">
+                    {filteredRepos.length === 0 ? (
+                      <li className="px-6 py-12 text-center">
+                        <p className="text-[15px] font-medium text-ink">
+                          {repos.length === 0 ? 'No repositories on this GitHub account' : 'No repositories match'}
+                        </p>
+                        <p className="mt-1 text-[13.5px] text-muted">
+                          {repos.length === 0
+                            ? 'Push a project to GitHub, or paste a public link to someone else’s repo you worked on.'
+                            : 'Try another name, or show forks again.'}
+                        </p>
+                        {(searchQuery || hideForks) && repos.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setHideForks(false);
+                            }}
+                            className="pj-btn pj-btn-ghost pj-btn-sm mt-4"
+                          >
+                            Clear filters
+                          </button>
+                        )}
+                      </li>
+                    ) : (
+                      filteredRepos.map((repo) => {
+                        const importing = importingRepo === repo.fullName;
+                        return (
+                          <li
+                            key={repo.id}
+                            className="p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-paper/60 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="font-mono text-[13.5px] text-ink break-all">{repo.fullName}</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[11.5px] border border-line bg-paper text-muted">
+                                  {repo.isPrivate && <Lock className="w-3 h-3" aria-hidden />}
+                                  {repo.isPrivate ? 'Private' : 'Public'}
+                                </span>
+                                {repo.isFork && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[11.5px] border border-line bg-paper text-muted">
+                                    <GitFork className="w-3 h-3" aria-hidden />
+                                    Fork
+                                  </span>
+                                )}
+                              </div>
+
+                              {repo.description && (
+                                <p className="mt-1 text-[13.5px] text-muted line-clamp-1">{repo.description}</p>
+                              )}
+
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+                                {repo.language && (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-olive" aria-hidden />
+                                    {repo.language}
+                                  </span>
+                                )}
+                                {repo.stars > 0 && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Star className="w-3.5 h-3.5" aria-hidden />
+                                    {repo.stars}
+                                  </span>
+                                )}
+                                <span>Updated {formatDate(repo.updatedAt)}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                              <a
+                                href={repo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-9 h-9 grid place-items-center rounded-full text-muted hover:text-ink hover:bg-paper transition-colors"
+                                aria-label={`Open ${repo.fullName} on GitHub`}
+                                title="Open on GitHub"
+                              >
+                                <ExternalLink className="w-4 h-4" aria-hidden />
+                              </a>
+                              <button
+                                type="button"
+                                disabled={importingRepo !== null}
+                                onClick={() => handleImport(repo.fullName)}
+                                className="pj-btn pj-btn-sm"
+                              >
+                                {importing ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                                    Importing…
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-4 h-4" aria-hidden />
+                                    Import
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 2: Paste Public Repo URL */}
+          {activeTab === 'url' && (
+            <div role="tabpanel" id="panel-url" aria-labelledby="tab-url" className="pj-card p-5 sm:p-7">
+              <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Import from a public GitHub link</h2>
+              <p className="mt-1 text-[14px] text-muted">
+                Any public repository works, for example{' '}
+                <code className="font-mono text-[12.5px] text-ink-2 px-1.5 py-0.5 rounded-md bg-paper border border-line break-all">
+                  https://github.com/owner/repository
+                </code>
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleImport(undefined, trimmedUrl);
+                }}
+                className="mt-5 flex flex-col sm:flex-row gap-2"
+              >
+                <label htmlFor="repoUrl" className="sr-only">
+                  GitHub URL
+                </label>
+                <input
+                  id="repoUrl"
+                  type="url"
+                  required
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={publicUrl}
+                  onChange={(e) => setPublicUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repository"
+                  aria-invalid={urlLooksWrong || undefined}
+                  aria-describedby="repoUrl-hint"
+                  className={cn('pj-input flex-1 min-w-0 font-mono text-[14px]', urlLooksWrong && 'border-warn')}
+                />
+                <button type="submit" disabled={urlImporting || !trimmedUrl} className="pj-btn shrink-0">
+                  {urlImporting ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Connecting...</span>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                      Importing…
                     </>
                   ) : (
-                    <span>Connect GitHub (Public repos)</span>
+                    'Import repository'
                   )}
                 </button>
-                <button
-                  type="button"
-                  disabled={connecting}
-                  onClick={() => handleConnectGitHub('private')}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Also allow private repos</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Search & Repo List */
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search repositories..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-[#161a26] border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-neutral-500 w-full sm:w-auto justify-between sm:justify-end">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={hideForks}
-                      onChange={(e) => setHideForks(e.target.checked)}
-                      className="rounded border-neutral-300"
-                    />
-                    <span>Hide forks</span>
-                  </label>
-                  <span>{filteredRepos.length} repositories</span>
-                </div>
-              </div>
-
-              <div className="border border-neutral-200 dark:border-neutral-800 rounded-2xl bg-white dark:bg-[#161a26] divide-y divide-neutral-100 dark:divide-neutral-800/80 overflow-hidden">
-                {filteredRepos.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-neutral-400">
-                    No repositories found matching your filter.
-                  </div>
-                ) : (
-                  filteredRepos.map((repo) => (
-                    <div
-                      key={repo.id}
-                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-neutral-50/50 dark:hover:bg-[#1a2030]/50 transition"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-xs text-neutral-900 dark:text-white truncate">
-                            {repo.fullName}
-                          </span>
-                          {repo.isPrivate ? (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                              <Lock className="w-2.5 h-2.5" /> Private
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                              Public
-                            </span>
-                          )}
-                          {repo.isFork && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-500">
-                              Fork
-                            </span>
-                          )}
-                        </div>
-
-                        {repo.description && (
-                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-1 mb-1.5">
-                            {repo.description}
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-3 text-[10px] text-neutral-400">
-                          {repo.language && (
-                            <span className="flex items-center gap-1 font-medium">
-                              <span className="w-2 h-2 rounded-full bg-blue-500" />
-                              {repo.language}
-                            </span>
-                          )}
-                          {repo.stars > 0 && (
-                            <span className="flex items-center gap-0.5">
-                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              {repo.stars}
-                            </span>
-                          )}
-                          <span>
-                            Updated {new Date(repo.updatedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href={repo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition"
-                          title="Open on GitHub"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-
-                        <button
-                          type="button"
-                          disabled={importingRepo === repo.fullName}
-                          onClick={() => handleImport(repo.fullName)}
-                          className="px-3.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                        >
-                          {importingRepo === repo.fullName ? (
-                            <span>Importing...</span>
-                          ) : (
-                            <>
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Import</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              </form>
+              <p id="repoUrl-hint" className={cn('mt-2 text-[12.5px] pl-4', urlLooksWrong ? 'text-warn' : 'text-muted')}>
+                {urlLooksWrong
+                  ? 'This does not look like a GitHub repository link. It should start with https://github.com/.'
+                  : 'Reading a large repository can take a minute. You can leave the page while it works.'}
+              </p>
             </div>
           )}
         </div>
-      )}
 
-      {/* Tab 2: Paste Public Repo URL */}
-      {activeTab === 'url' && (
-        <div className="p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#161a26] space-y-4 max-w-xl mx-auto">
-          <div>
-            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-              Import via Public GitHub URL
-            </h3>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-              Paste the link of any public GitHub repository (e.g. <code>https://github.com/facebook/react</code> or your own project).
-            </p>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleImport(undefined, publicUrl.trim());
-            }}
-            className="space-y-3"
-          >
-            <div>
-              <label htmlFor="repoUrl" className="sr-only">GitHub URL</label>
-              <input
-                id="repoUrl"
-                type="url"
-                required
-                value={publicUrl}
-                onChange={(e) => setPublicUrl(e.target.value)}
-                placeholder="https://github.com/owner/repository"
-                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-[#0c0e14] border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={urlImporting || !publicUrl.trim()}
-              className="w-full py-2.5 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold shadow-xs transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-            >
-              {urlImporting ? 'Ingesting repository...' : 'Import Repository'}
-            </button>
-          </form>
-        </div>
-      )}
-    </div>
+        {/* What happens next */}
+        <aside aria-labelledby="after-import" className="rounded-m border border-line bg-paper-2 p-5">
+          <h2 id="after-import" className="pj-section-title">
+            After you import
+          </h2>
+          <ol className="mt-4 space-y-4">
+            {AFTER_IMPORT.map((s, i) => (
+              <li key={s.title} className="flex gap-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-sheet border border-line grid place-items-center font-mono text-[11.5px] text-ink-2">
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-ink">{s.title}</p>
+                  <p className="mt-0.5 text-[13px] text-muted leading-snug">{s.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </aside>
+      </div>
+    </Page>
   );
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }

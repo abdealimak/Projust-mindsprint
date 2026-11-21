@@ -439,7 +439,10 @@ async function main() {
     const ctm = el.radar.getScreenCTM();
     if (ctm) { toW(ctm.e, ctm.f, U.uA.value[3]); U.uS.value[3] = 110 * ctm.a / ppw; }
     r = el.paper.getBoundingClientRect();
-    toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[4]); U.uS.value[4] = Math.max(r.width, r.height) * 0.6 / ppw;
+    // the seal hugs the paper: stacked (under 1024px) it is sized by width so it stays off the text below;
+    // side by side it never reaches past the gap into the text column
+    toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[4]);
+    U.uS.value[4] = (W < 1024 ? r.width * 0.62 : Math.min(Math.max(r.width, r.height) * 0.6, r.width * 0.5 + 70)) / ppw;
     toW(W / 2, H / 2, U.uA.value[5]); U.uS.value[5] = W * 0.55 / ppw;
     r = el.close.getBoundingClientRect();
     toW(W / 2, r.top + r.height * 0.5, U.uA.value[6]); U.uS.value[6] = H * 0.42 / ppw;

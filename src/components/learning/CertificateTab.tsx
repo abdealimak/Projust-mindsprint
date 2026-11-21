@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Misc';
-import { ASPECTS, ASPECT_LABELS, UNLOCK_AVERAGE, UNLOCK_FLOOR, type LearningCertificate } from '@/types/learning';
+import { UNLOCK_AVERAGE, UNLOCK_FLOOR, type LearningCertificate } from '@/types/learning';
+import { CertificatePaper, fmtCertDate } from '@/app/cert/[code]/CertActions';
 import { api, StateCard } from './shared';
 import { loadErrorText } from './shared';
 
@@ -83,74 +84,68 @@ export function CertificateTab({ projectId, onGoToQuiz }: Props) {
     }
   };
 
+  const history = [...(cert.history || [])].sort((a, b) => b.version - a.version);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
-      <article className="pj-card p-6 sm:p-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[12.5px] text-muted">{cert.code}</span>
-          {!cert.sample && (
-            <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-[#E6F5D0] text-[#3F6212] border border-[#CFE6AE]">
-              Verified
-            </span>
-          )}
-          {cert.sample && (
-            <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-[#FDF3DC] text-[#8A5A0B] border border-[#F1DEAF]">
-              Sample
-            </span>
-          )}
-        </div>
-        <h3 className="pj-display text-[clamp(32px,3.6vw,48px)] mt-4">
-          {cert.recipient_name} <em>understands {cert.repo_full_name.split('/').pop()}.</em>
-        </h3>
-        <p className="mt-3 text-[14.5px] text-muted">
-          <span className="font-mono text-[13px]">{cert.repo_full_name}</span>
-          {cert.commit_sha && <span className="font-mono text-[13px]"> @ {cert.commit_sha.slice(0, 7)}</span>}
-          <span className="ml-2">Version {cert.version}</span>
-          <span className="ml-2">{cert.level}</span>
-        </p>
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-5 items-start">
+      <CertificatePaper cert={cert} verifyUrl={url} tone="light" nameAs="h3" className="max-w-[820px]" />
 
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
-          {ASPECTS.map((a) => (
-            <div key={a} className="border-t border-line pt-3">
-              <p className="text-[13px] text-muted">{ASPECT_LABELS[a]}</p>
-              <p className="font-serif text-[30px] leading-none mt-1 tabular-nums">{cert.scores[a]}</p>
-            </div>
-          ))}
-        </div>
-
-        {cert.concepts.length > 0 && (
-          <div className="mt-8">
-            <h4 className="text-[13px] font-medium text-muted mb-2">Concepts shown</h4>
-            <div className="flex flex-wrap gap-1.5">
-              {cert.concepts.slice(0, 10).map((c) => (
-                <span key={c.name} className="pj-chip">
-                  {c.name}
-                </span>
-              ))}
-            </div>
+      <aside className="pj-card p-5 flex flex-col gap-5">
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[15px] font-medium">Your certificate</p>
+            {cert.sample ? (
+              <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-[#FDF3DC] text-[#8A5A0B] border border-[#F1DEAF]">
+                Sample
+              </span>
+            ) : (
+              <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-[#E6F5D0] text-[#3F6212] border border-[#CFE6AE]">
+                Verified
+              </span>
+            )}
           </div>
-        )}
-      </article>
-
-      <aside className="pj-card p-5 space-y-4">
-        <div className="flex items-end justify-between">
-          <p className="text-[15px] font-medium">Overall</p>
-          <span className="font-serif text-[56px] leading-none tabular-nums">{cert.overall}</span>
+          <p className="mt-1 font-mono text-[12.5px] text-muted">{cert.code}</p>
         </div>
+
         <div className="flex flex-col gap-2">
           <Link href={`/cert/${cert.code}`} className="pj-btn w-full">
-            <ExternalLink className="w-4 h-4" />
+            <ExternalLink className="w-4 h-4" aria-hidden />
             Open public page
           </Link>
-          <Button onClick={copy} className="w-full" aria-live="polite">
-            {copied ? <Check className="w-4 h-4 text-[#3F6212]" /> : <Copy className="w-4 h-4" />}
-            {copied ? 'Link copied' : 'Copy link'}
+          <Button onClick={copy} className="w-full">
+            {copied ? <Check className="w-4 h-4 text-[#3F6212]" aria-hidden /> : <Copy className="w-4 h-4" aria-hidden />}
+            <span aria-live="polite">{copied ? 'Link copied' : 'Copy link'}</span>
           </Button>
         </div>
+
+        {history.length > 0 && (
+          <div>
+            <p className="text-[13px] font-medium text-muted">Version history</p>
+            <ol className="mt-2 border-t border-line text-[13.5px]">
+              {history.map((h) => {
+                const current = h.version === cert.version;
+                return (
+                  <li
+                    key={h.version}
+                    className={`grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-2.5 py-2.5 border-b border-line ${
+                      current ? 'text-ink' : 'text-muted'
+                    }`}
+                  >
+                    <span className="font-mono text-[12px]">v{h.version}</span>
+                    <span>{fmtCertDate(h.at)}</span>
+                    <span className="font-mono text-[12px]">avg {Math.round(h.overall)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
+
         <p className="text-[13px] text-muted">
-          Retake the quiz any time. A better score issues a new version under the same code.
+          Retake the quiz any time. A better score issues a new version under the same ID, and the old ones stay in
+          the history.
         </p>
-        <Button variant="invisible" size="sm" onClick={onGoToQuiz} className="-ml-3">
+        <Button variant="invisible" size="sm" onClick={onGoToQuiz} className="-ml-3 self-start">
           Go to the quiz
         </Button>
       </aside>

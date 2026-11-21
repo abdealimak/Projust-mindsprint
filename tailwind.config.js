@@ -65,6 +65,9 @@ const mint = {
   950: '#0C261C',
 };
 
+/** A palette token backed by the `--<name>-rgb` channels in globals.css. */
+const rgb = (name) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
+
 module.exports = {
   // Kept so existing `dark:` classes compile, but the `dark` class is never applied (light only).
   darkMode: ['class'],
@@ -88,46 +91,46 @@ module.exports = {
         emerald: mint,
         green: mint,
 
-        // Landing tokens
-        paper: { DEFAULT: 'var(--bg)', 2: 'var(--paper)' },
-        sheet: 'var(--white)',
-        ink: { DEFAULT: 'var(--ink)', 2: 'var(--ink-2)' },
-        muted: 'var(--muted)',
-        line: { DEFAULT: 'var(--line)', 2: 'var(--line-2)' },
-        lime: { DEFAULT: 'var(--lime)', soft: '#EEF7C8' },
-        olive: { DEFAULT: 'var(--olive)', d: 'var(--olive-d)' },
-        tangerine: 'var(--orange)',
-        sky2: 'var(--sky)',
-        pass: 'var(--pass)',
-        warn: 'var(--red)',
+        // Landing tokens. RGB channels (globals.css) so opacity modifiers like bg-ink/30 work.
+        paper: { DEFAULT: rgb('bg'), 2: rgb('paper') },
+        sheet: rgb('white'),
+        ink: { DEFAULT: rgb('ink'), 2: rgb('ink-2') },
+        muted: rgb('muted'),
+        line: { DEFAULT: rgb('line'), 2: rgb('line-2') },
+        lime: { DEFAULT: rgb('lime'), soft: '#EEF7C8' },
+        olive: { DEFAULT: rgb('olive'), d: rgb('olive-d') },
+        tangerine: rgb('orange'),
+        sky2: rgb('sky'),
+        pass: rgb('pass'),
+        warn: rgb('red'),
 
         // Legacy semantic tokens used across the app, now pointing at the landing palette
         canvas: {
-          DEFAULT: 'var(--bg-canvas)',
-          subtle: 'var(--bg-subtle)',
-          inset: 'var(--bg-inset)',
+          DEFAULT: rgb('bg'),
+          subtle: rgb('white'),
+          inset: rgb('paper'),
         },
         border: {
-          DEFAULT: 'var(--border)',
-          subtle: 'var(--border-subtle, var(--border))',
+          DEFAULT: rgb('line'),
+          subtle: rgb('line'),
         },
         fg: {
-          DEFAULT: 'var(--text)',
-          muted: 'var(--text-muted)',
+          DEFAULT: rgb('ink'),
+          muted: rgb('muted'),
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          hover: 'var(--accent-hover, var(--accent))',
+          DEFAULT: rgb('olive'),
+          hover: rgb('olive-d'),
         },
         success: {
-          DEFAULT: 'var(--success)',
-          hover: 'var(--success-hover, var(--success))',
+          DEFAULT: rgb('pass'),
+          hover: rgb('success-hover'),
         },
         danger: {
-          DEFAULT: 'var(--danger)',
+          DEFAULT: rgb('red'),
         },
         attention: {
-          DEFAULT: 'var(--attention)',
+          DEFAULT: rgb('attention'),
         },
       },
       fontFamily: {

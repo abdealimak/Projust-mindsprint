@@ -16,7 +16,14 @@ import {
 import { getCurrentUser } from '@/lib/auth/user';
 import type { LearningCertificate, LearningSummary } from '@/types/learning';
 import { certificateByCode, learningSummaries, listCertificates } from '@/lib/brain/service';
-import { demoHasCert, demoSummaries, sampleCertificate, SAMPLE_CERT_CODE } from '@/lib/brain/demo';
+import {
+  demoHasCert,
+  demoSummaries,
+  sampleCertificate,
+  SAMPLE_CERT_CODE,
+  landingSampleCertificate,
+  LANDING_CERT_CODE,
+} from '@/lib/brain/demo';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -141,10 +148,11 @@ export async function getCertificates(): Promise<LearningCertificate[]> {
   }
 }
 
-/** Public verification. Only real codes from the database, plus the one labelled sample. */
+/** Public verification. Only real codes from the database, plus the two labelled samples. */
 export async function getCertificateByCode(code: string): Promise<LearningCertificate | null> {
   const c = code.trim().toUpperCase();
   if (c === SAMPLE_CERT_CODE) return sampleCertificate();
+  if (c === LANDING_CERT_CODE) return landingSampleCertificate();
   try {
     return await certificateByCode(c);
   } catch (err) {

@@ -87,9 +87,14 @@ export default function ExplorePage() {
         description="Ideas for projects that teach real production skills. Build one on your own GitHub, then import it so Projust can check you understand it."
       />
 
+      <p className="mb-6 text-[14px] text-muted max-w-[68ch]">
+        These are suggestions, not courses. Your course and quiz are written from the code you actually push, so two
+        people building the same idea get different questions.
+      </p>
+
       <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {IDEAS.map((idea) => (
-          <li key={idea.id} className="pj-card p-6 flex flex-col">
+          <li key={idea.id} className="pj-card p-5 sm:p-6 flex flex-col">
             <div className="flex items-center justify-between gap-3 text-[12.5px]">
               <span className={`px-2.5 py-0.5 rounded-full font-medium ${LEVEL_TONE[idea.level]}`}>
                 {idea.level}
@@ -97,11 +102,11 @@ export default function ExplorePage() {
               <span className="text-muted">About {idea.hours}</span>
             </div>
 
-            <h3 className="pj-display text-[28px] mt-5">{idea.title}</h3>
+            <h2 className="pj-display text-[28px] leading-[1.05] mt-5">{idea.title}</h2>
             <p className="mt-3 text-[14.5px] text-ink-2 leading-relaxed">{idea.build}</p>
 
             <div className="mt-5">
-              <h4 className="text-[12.5px] font-medium text-muted">Skills it exercises</h4>
+              <h3 className="text-[12.5px] font-medium text-muted">Skills it exercises</h3>
               <ul className="mt-2 space-y-1.5">
                 {idea.skills.map((s) => (
                   <li key={s} className="flex items-center gap-2 text-[14px]">
@@ -112,25 +117,20 @@ export default function ExplorePage() {
               </ul>
             </div>
 
-            <div className="mt-5 rounded-s bg-paper px-4 py-3 text-[13.5px] text-ink-2">
-              <span className="font-medium text-ink">The quiz will ask: </span>
+            <div className="mt-5 rounded-s bg-paper px-4 py-3 text-[13.5px] text-ink-2 leading-snug">
+              <span className="block text-[12px] font-medium text-muted mb-1">The quiz will ask</span>
               {idea.checks}
             </div>
 
             <div className="mt-auto pt-6 flex items-center justify-between gap-3">
-              <span className="text-[12.5px] text-muted">Import when built</span>
-              <Link href="/projects/new" className="pj-btn">
-                Start
+              <span className="text-[12.5px] text-muted">Build it on your GitHub first</span>
+              <Link href="/projects/new" className="pj-btn pj-btn-ghost pj-btn-sm">
+                Import it
               </Link>
             </div>
           </li>
         ))}
       </ul>
-
-      <p className="mt-10 text-[14px] text-muted max-w-[60ch]">
-        These are suggestions, not courses. Your course and quiz are generated from the code you
-        actually write, so two people building the same idea get different questions.
-      </p>
     </Page>
   );
 }

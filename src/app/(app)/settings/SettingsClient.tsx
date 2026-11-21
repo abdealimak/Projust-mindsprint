@@ -7,8 +7,8 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar, Skeleton } from '@/components/ui/Misc';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase/auth';
+import { Page, PageHeader } from '@/components/layout/PageHeader';
+import { getFirebaseAuth, isFirebaseConfigured, connectGitHubAccount, authErrorMessage } from '@/lib/firebase/auth';
 import { cn } from '@/lib/utils';
 import {
   PersonIcon,
@@ -90,6 +90,22 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
   const [privacyMessage, setPrivacyMessage] = useState<string | null>(null);
 
   const [github, setGithub] = useState<'checking' | 'connected' | 'disconnected' | 'unknown'>('checking');
+  const [githubBusy, setGithubBusy] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+
+  // Same Firebase popup flow as the import page (no separate GitHub OAuth app needed)
+  const handleConnectGithub = async () => {
+    setGithubBusy(true);
+    setGithubError(null);
+    try {
+      await connectGitHubAccount('public');
+      setGithub('connected');
+    } catch (err) {
+      setGithubError(authErrorMessage(err, 'GitHub'));
+    } finally {
+      setGithubBusy(false);
+    }
+  };
   const [provider, setProvider] = useState<string | null>(null);
 
   // Load the saved profile from the server route.
@@ -255,7 +271,7 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
         : 'Unknown';
 
   return (
-    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1040px] mx-auto w-full space-y-6">
+    <Page narrow className="space-y-6">
       <PageHeader
         className="mb-2"
         eyebrow="Settings"
@@ -267,19 +283,18 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
       <div
         role="tablist"
         aria-label="Settings sections"
-        className="grid grid-cols-3 sm:inline-flex p-1 gap-0.5 rounded-full border border-line bg-sheet sm:w-fit"
+        className="pj-segment grid grid-cols-3 w-full sm:inline-flex sm:w-fit"
       >
         {tabs.map(({ id, label, short, icon: Icon }) => (
           <button
             key={id}
+            type="button"
             role="tab"
+            id={`settings-tab-${id}`}
             aria-selected={activeTab === id}
+            aria-controls={`settings-panel-${id}`}
             onClick={() => setActiveTab(id)}
-            className={cn(
-              'flex items-center justify-center gap-2 h-9 px-3 sm:px-4 rounded-full text-[14px] font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40',
-              activeTab === id ? 'bg-olive text-[#F6F8EC] shadow-pill' : 'text-ink-2 hover:bg-paper'
-            )}
+            className="!px-3 sm:!px-4"
           >
             <Icon className="w-4 h-4 hidden sm:block" />
             <span className="sm:hidden">{short}</span>
@@ -299,11 +314,11 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
 
       {/* Profile */}
       {activeTab === 'profile' && (
-        <Card>
+        <Card role="tabpanel" id="settings-panel-profile" aria-labelledby="settings-tab-profile">
           <CardHeader title="Public profile" />
           <CardContent>
             <form onSubmit={handleSaveProfile} noValidate className="space-y-5">
-              <div className="flex items-center gap-4 pb-5 border-b border-line">
+              <div className="flex items-center gap-4 pb-5 border-b border-line min-w-0">
                 <Avatar
                   src={profile.avatar_url}
                   fallback={(form.full_name || form.username || 'U')[0]}
@@ -462,7 +477,7 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
 
       {/* Account & providers */}
       {activeTab === 'account' && (
-        <div className="space-y-6">
+        <div role="tabpanel" id="settings-panel-account" aria-labelledby="settings-tab-account" className="space-y-6">
           <Card>
             <CardHeader title="Sign-in" />
             <CardContent>
@@ -508,13 +523,24 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
                     : github === 'unknown'
                       ? "We couldn't check your GitHub connection. Refresh the page to try again."
                       : 'Connect GitHub to import your repositories and prove you own them. This is separate from how you sign in.'}
+                  {githubError && (
+                    <span role="alert" className="block mt-2 text-[13px] text-red-700">
+                      {githubError}
+                    </span>
+                  )}
                 </p>
               </div>
               {github !== 'connected' && github !== 'checking' && (
-                <a href="/api/github/connect" className="pj-btn pj-btn-ghost shrink-0 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleConnectGithub}
+                  disabled={githubBusy || isDemo}
+                  title={isDemo ? 'Sign in with GitHub or Google to connect a GitHub account' : undefined}
+                  className="pj-btn pj-btn-ghost shrink-0 w-full sm:w-auto"
+                >
                   <MarkGithubIcon className="w-4 h-4" />
-                  Connect GitHub
-                </a>
+                  {githubBusy ? 'Connecting…' : 'Connect GitHub'}
+                </button>
               )}
             </CardContent>
           </Card>
@@ -523,7 +549,7 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
 
       {/* Privacy */}
       {activeTab === 'privacy' && (
-        <Card>
+        <Card role="tabpanel" id="settings-panel-privacy" aria-labelledby="settings-tab-privacy">
           <CardHeader title="Profile visibility" />
           <CardContent className="space-y-4">
             <div className="flex items-start justify-between gap-6">
@@ -567,7 +593,7 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   );
 }
 

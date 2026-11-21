@@ -8,7 +8,8 @@ import { ASK_SYSTEM_PROMPT } from '@/lib/ai/prompts/ask';
 import { ROUTER_SYSTEM_PROMPT } from '@/lib/ai/prompts/router';
 import { FileRouterSchema } from '@/lib/ai/schemas';
 import { parseCitations, formatNumberedFile } from '@/lib/ai/citations';
-import { getCurrentUserId } from '@/lib/auth/user';
+import { getCurrentUser } from '@/lib/auth/user';
+import { demoTutorAnswer, isDemoProject } from '@/lib/brain/demo';
 
 export async function POST(
   request: Request,
@@ -22,9 +23,18 @@ export async function POST(
       return NextResponse.json({ error: 'Question is required' }, { status: 400 });
     }
 
-    const userId = await getCurrentUserId();
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
+    }
+    const userId = user.uid;
+
+    // Demo users get a canned, grounded answer for the sample project (never an AI call)
+    if (user.demo) {
+      if (!isDemoProject(projectId)) {
+        return NextResponse.json({ error: 'Sample data is available for alexchen-dev/shop-api only.' }, { status: 404 });
+      }
+      return demoTextStream(demoTutorAnswer(question));
     }
 
     const supabase = createClient();
@@ -214,4 +224,20 @@ ${question}`;
     console.error('Ask route error:', err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+}
+
+/** Stream a fixed answer in small chunks so the demo tutor looks like the live one. */
+function demoTextStream(text: string): Response {
+  const encoder = new TextEncoder();
+  const chunks = text.match(/\S+\s*/g) || [text];
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+        await new Promise((r) => setTimeout(r, 18));
+      }
+      controller.close();
+    },
+  });
+  return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'x-thread-id': '' } });
 }

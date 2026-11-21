@@ -12,6 +12,8 @@ import {
   GraduationCap,
   Award,
   Settings,
+  MessagesSquare,
+  Compass,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,12 +41,14 @@ interface Item {
 }
 
 const SHORTCUTS: Omit<Item, 'group' | 'key'>[] = [
-  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Home', href: '/dashboard', icon: LayoutDashboard, meta: 'Dashboard' },
+  { title: 'Import a repository', href: '/projects/new', icon: Plus, meta: 'Paste a GitHub link or pick a repo' },
   { title: 'Projects', href: '/projects', icon: FolderOpen },
-  { title: 'Import a repository', href: '/projects/new', icon: Plus, meta: 'Import repo' },
-  { title: 'Courses', href: '/courses', icon: GraduationCap },
+  { title: 'Ask the tutor', href: '/tutor', icon: MessagesSquare, meta: 'Questions about your own code' },
+  { title: 'Courses & quizzes', href: '/courses', icon: GraduationCap },
   { title: 'Certificates', href: '/certificates', icon: Award },
-  { title: 'Settings', href: '/settings', icon: Settings },
+  { title: 'Explore practice projects', href: '/explore', icon: Compass },
+  { title: 'Settings', href: '/settings', icon: Settings, meta: 'Profile, GitHub, privacy' },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
@@ -83,6 +87,16 @@ export function SearchPalette({ isOpen, onClose }: SearchPaletteProps) {
     return () => {
       window.clearTimeout(t);
       restoreRef.current?.focus?.();
+    };
+  }, [isOpen]);
+
+  // Keep the page behind the palette from scrolling.
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
     };
   }, [isOpen]);
 
@@ -252,7 +266,7 @@ export function SearchPalette({ isOpen, onClose }: SearchPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh] bg-ink/30"
+      className="fixed inset-0 z-50 flex items-start justify-center px-3 sm:px-4 pt-[8vh] sm:pt-[12vh] bg-ink/30"
       onMouseDown={onClose}
     >
       <div
@@ -271,13 +285,13 @@ export function SearchPalette({ isOpen, onClose }: SearchPaletteProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your projects or jump to a page"
+            placeholder="Search projects or jump to a page"
             role="combobox"
             aria-expanded="true"
             aria-controls={listId}
             aria-activedescendant={items.length ? `${listId}-opt-${active}` : undefined}
             aria-autocomplete="list"
-            className="flex-1 min-w-0 bg-transparent text-[15px] text-ink placeholder:text-muted focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[15px] text-ink placeholder:text-muted focus:outline-none"
             style={{ outline: 'none' }}
           />
           <button

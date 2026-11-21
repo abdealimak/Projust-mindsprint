@@ -1,66 +1,42 @@
 import React from 'react';
-import { Card, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Misc';
 
+/** Mirrors the dashboard layout: greeting, prompt bar, next-step card, shortcuts, projects rail. */
 export default function DashboardLoading() {
   return (
-    <div className="w-full">
-      {/* Top greeting skeleton */}
-      <div className="mb-4">
-        <Skeleton className="h-7 w-48 mb-2" />
-        <Skeleton className="h-4 w-80" />
+    <div className="flex flex-col xl:flex-row min-h-full" aria-busy="true" aria-label="Loading your workspace">
+      <div className="flex-1 min-w-0 px-4 sm:px-10 lg:px-14 pt-8 pb-12 sm:pt-10 lg:pt-14">
+        <div className="max-w-[880px] mx-auto">
+          <Skeleton className="h-3 w-36" />
+          <Skeleton className="h-12 sm:h-14 w-[80%] mt-5" />
+          <Skeleton className="h-12 sm:h-14 w-[60%] mt-3" />
+          <Skeleton className="h-4 w-[70%] mt-6" />
+
+          <Skeleton className="h-[92px] w-full mt-10 rounded-m" />
+
+          <div className="pj-card mt-10 p-6">
+            <div className="grid grid-cols-5 gap-2">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-1.5 rounded-full" />
+              ))}
+            </div>
+            <Skeleton className="h-5 w-48 mt-8" />
+            <Skeleton className="h-4 w-72 max-w-full mt-2" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-12">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[116px] rounded-m" />
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left column skeleton */}
-        <div className="lg:col-span-3 space-y-4">
-          <Card>
-            <CardHeader title={<Skeleton className="h-4 w-28" />} />
-            <div className="p-3 space-y-3">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-5/6" />
-            </div>
-          </Card>
-          <Card>
-            <CardHeader title={<Skeleton className="h-4 w-24" />} />
-            <div className="p-3 space-y-3">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          </Card>
-        </div>
-
-        {/* Center column skeleton */}
-        <div className="lg:col-span-6 space-y-5">
-          <Skeleton className="h-28 w-full rounded-[8px]" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-32 w-full rounded-[6px]" />
-            <Skeleton className="h-32 w-full rounded-[6px]" />
-          </div>
-          <div className="space-y-3">
-            <Skeleton className="h-20 w-full rounded-[6px]" />
-            <Skeleton className="h-20 w-full rounded-[6px]" />
-            <Skeleton className="h-20 w-full rounded-[6px]" />
-          </div>
-        </div>
-
-        {/* Right column skeleton */}
-        <div className="lg:col-span-3 space-y-4">
-          <Card>
-            <CardHeader title={<Skeleton className="h-4 w-32" />} />
-            <div className="p-4 flex flex-col items-center">
-              <Skeleton className="h-10 w-16 mb-4" />
-              <Skeleton className="h-40 w-40 rounded-full" />
-            </div>
-          </Card>
-          <Card>
-            <CardHeader title={<Skeleton className="h-4 w-24" />} />
-            <div className="p-3 space-y-3">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          </Card>
+      <div className="w-full xl:w-[340px] shrink-0 border-t xl:border-t-0 xl:border-l border-line bg-paper-2 px-4 sm:px-10 xl:px-6 py-8 xl:py-10">
+        <Skeleton className="h-7 w-32" />
+        <div className="mt-5 space-y-2.5">
+          <Skeleton className="h-32 rounded-2xl" />
+          <Skeleton className="h-12 rounded-2xl" />
         </div>
       </div>
     </div>

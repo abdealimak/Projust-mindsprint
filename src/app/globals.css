@@ -41,6 +41,26 @@
   --danger: var(--red);
   --attention: #B7791F;
 
+  /* The same colours as RGB channels, so Tailwind opacity modifiers (bg-ink/30) work.
+     Keep these in sync with the hex values above. */
+  --bg-rgb: 243 241 236;
+  --paper-rgb: 251 250 247;
+  --white-rgb: 255 255 255;
+  --ink-rgb: 17 17 16;
+  --ink-2-rgb: 42 41 39;
+  --muted-rgb: 94 91 86;
+  --line-rgb: 227 223 215;
+  --line-2-rgb: 214 209 199;
+  --lime-rgb: 205 235 90;
+  --olive-rgb: 74 90 30;
+  --olive-d-rgb: 58 71 22;
+  --orange-rgb: 255 122 61;
+  --sky-rgb: 127 184 255;
+  --pass-rgb: 63 127 31;
+  --red-rgb: 229 72 77;
+  --attention-rgb: 183 121 31;
+  --success-hover-rgb: 79 154 42;
+
   color-scheme: light;
 }
 
@@ -172,6 +192,98 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+  }
+
+  /* Disabled state for the pill buttons (links styled as buttons ignore it) */
+  .pj-btn:disabled,
+  .pj-btn[aria-disabled="true"] {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Compact pill button, for rows and card footers */
+  .pj-btn-sm {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 13.5px;
+    gap: 6px;
+  }
+
+  /* Text input: white, 1px line, pill radius, ink border on focus */
+  .pj-input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line-2);
+    background: var(--white);
+    color: var(--ink);
+    font-size: 15px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .pj-input::placeholder {
+    color: #8F8B84;
+  }
+  .pj-input:focus {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: 0 0 0 3px rgba(17, 17, 16, .06);
+  }
+
+  /* Segmented control (landing pill nav): track + olive active pill */
+  .pj-segment {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--white);
+    max-width: 100%;
+  }
+  .pj-segment > button,
+  .pj-segment > a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-2);
+    white-space: nowrap;
+    transition: background-color .2s, color .2s;
+  }
+  .pj-segment > button:hover,
+  .pj-segment > a:hover {
+    background: var(--bg);
+  }
+  .pj-segment > [aria-selected="true"],
+  .pj-segment > [aria-current="page"] {
+    background: var(--olive);
+    color: #F6F8EC;
+    box-shadow: 0 6px 14px -6px rgba(58,71,22,.6), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+
+  /* Section heading inside a page: small sans label with a count or link on the right */
+  .pj-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  /* Horizontal scroller that hides its scrollbar (chip rows on phones) */
+  .pj-scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pj-scroll-x::-webkit-scrollbar {
+    display: none;
   }
 }
 

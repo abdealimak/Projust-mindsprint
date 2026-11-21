@@ -53,15 +53,28 @@ export default function JobsPage() {
         }
       />
 
+      <div
+        role="note"
+        className="mb-10 flex items-start gap-3 rounded-2xl border border-[#F1DEAF] bg-[#FDF3DC] px-4 py-3 text-[14px] text-[#5C3D08]"
+      >
+        <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-[#B7791F] shrink-0" aria-hidden />
+        <p>
+          <span className="font-semibold">Not live yet.</span> No companies are listed and you cannot apply here. This
+          page shows how jobs will work once they launch.
+        </p>
+      </div>
+
       <section aria-labelledby="how-heading">
-        <h3 id="how-heading" className="text-[15px] font-semibold">
+        <h2 id="how-heading" className="pj-section-title">
           How it will work
-        </h3>
+        </h2>
         <ol className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           {STEPS.map((s, i) => (
             <li key={s.title} className="pj-card p-5">
-              <span className="font-mono text-[12px] text-muted">Step {i + 1}</span>
-              <h4 className="mt-2 text-[16px] font-semibold">{s.title}</h4>
+              <span className="w-7 h-7 rounded-full bg-paper border border-line grid place-items-center font-mono text-[12px] text-ink-2">
+                {i + 1}
+              </span>
+              <h3 className="mt-3 text-[16px] font-semibold tracking-[-0.01em]">{s.title}</h3>
               <p className="mt-1.5 text-[14px] text-muted leading-relaxed">{s.body}</p>
             </li>
           ))}
@@ -70,9 +83,9 @@ export default function JobsPage() {
 
       <section aria-labelledby="examples-heading" className="mt-12">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 id="examples-heading" className="text-[15px] font-semibold">
+          <h2 id="examples-heading" className="pj-section-title">
             What a listing could look like
-          </h3>
+          </h2>
           <span className="text-[13px] text-muted">Examples only. Not real companies or openings.</span>
         </div>
 
@@ -80,13 +93,13 @@ export default function JobsPage() {
           {EXAMPLES.map((job) => (
             <li
               key={job.title}
-              className="relative rounded-m border border-dashed border-line-2 bg-paper-2 p-6"
+              className="relative rounded-m border border-dashed border-line-2 bg-paper-2 p-5 sm:p-6"
             >
-              <span className="absolute top-4 right-4 font-mono text-[11px] tracking-[.08em] uppercase px-2 py-0.5 rounded-full border border-line-2 text-muted bg-sheet">
-                Example listing
+              <span className="absolute top-4 right-4 text-[12px] font-medium px-2 py-0.5 rounded-full border border-line-2 text-muted bg-sheet">
+                Example
               </span>
-              <p className="text-[13px] text-muted pr-28">{job.company}</p>
-              <h4 className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">{job.title}</h4>
+              <p className="text-[13px] text-muted pr-20">{job.company}</p>
+              <h3 className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">{job.title}</h3>
               <p className="mt-1 text-[13.5px] text-muted">{job.where}</p>
               <p className="mt-4 text-[14px] text-ink-2 leading-relaxed">{job.why}</p>
               <div className="mt-4 rounded-s border border-line bg-sheet px-4 py-3 text-[13.5px]">
@@ -100,7 +113,7 @@ export default function JobsPage() {
 
       <div className="mt-12 pj-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-[16px] font-semibold">Get ready before listings open</h3>
+          <h2 className="text-[16px] font-semibold">Get ready before listings open</h2>
           <p className="mt-1 text-[14px] text-muted max-w-[56ch]">
             Import a project you built and earn a certificate. It is the one thing a listing will ask for.
           </p>

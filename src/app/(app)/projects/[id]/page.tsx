@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { ExternalLink, RefreshCw, Trash2, GitBranch, ShieldCheck, Check } from 'lucide-react';
+import { ExternalLink, RefreshCw, Trash2, GitBranch, ShieldCheck, Check, GitCommitHorizontal, FileCode, ChevronLeft, AlertCircle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { IngestionStepper } from '@/components/project/IngestionStepper';
 import { OverviewTab } from '@/components/project/OverviewTab';
@@ -78,6 +78,12 @@ export default function ProjectWorkspacePage() {
   const [notFoundMsg, setNotFoundMsg] = useState<string | null>(null);
   const [learning, setLearning] = useState<LearningSummary | null>(null);
   const [askQuestion, setAskQuestion] = useState<string | null>(searchParams.get('q'));
+  // The tutor stays mounted after the first visit so a conversation survives a trip to Files.
+  const [askVisited, setAskVisited] = useState(activeTab === 'ask');
+  useEffect(() => {
+    if (activeTab === 'ask') setAskVisited(true);
+  }, [activeTab]);
+  const indexedPaths = useMemo(() => new Set(files.map((f) => f.path)), [files]);
 
   const [dialog, setDialog] = useState<null | 'resync' | 'delete'>(null);
   const [busy, setBusy] = useState(false);
@@ -178,8 +184,10 @@ export default function ProjectWorkspacePage() {
 
   if (loading) {
     return (
-      <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1320px] mx-auto w-full space-y-6" aria-busy="true" aria-label="Loading project">
+      <div className="px-4 sm:px-10 lg:px-14 pt-8 pb-16 sm:pt-10 lg:pt-12 max-w-[1320px] mx-auto w-full space-y-6" aria-busy="true" aria-label="Loading project">
+        <Skeleton className="h-4 w-40" />
         <Skeleton className="h-12 w-72" />
+        <Skeleton className="h-[76px] w-full rounded-m" />
         <Skeleton className="h-11 w-full max-w-[720px] rounded-full" />
         <Skeleton className="h-[420px] w-full rounded-m" />
       </div>
@@ -210,34 +218,73 @@ export default function ProjectWorkspacePage() {
   const isReady = project.status === 'ready';
   const conceptsReady = learning?.concepts_status === 'ready';
 
+  const repoOwner = project.repo_full_name.includes('/') ? project.repo_full_name.split('/')[0] : null;
+  const steps = buildSteps(learning);
+  const nextStep = steps.find((st) => st.state !== 'done');
+
   return (
-    <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-12 max-w-[1320px] mx-auto w-full space-y-6">
+    <div className="px-4 sm:px-10 lg:px-14 pt-8 pb-16 sm:pt-10 lg:pt-12 max-w-[1320px] mx-auto w-full space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-line">
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 pb-6 border-b border-line">
         <div className="min-w-0">
-          <h1 className="pj-display text-[clamp(32px,3.6vw,48px)] break-words">{project.repo_full_name}</h1>
-          <div className="flex items-center gap-x-4 gap-y-1.5 text-[13px] text-muted mt-3 flex-wrap">
-            {project.ownership_pct !== undefined && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-medium bg-[#E6F5D0] text-[#3F6212] border border-[#CFE6AE]">
-                <ShieldCheck className="w-3.5 h-3.5" />
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-muted">
+            <Link href="/projects" className="inline-flex items-center gap-1 hover:text-ink transition-colors duration-150 -ml-1 px-1 rounded">
+              <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              Projects
+            </Link>
+            {repoOwner && (
+              <>
+                <span aria-hidden="true" className="text-line-2">/</span>
+                <span className="font-mono text-[12.5px] truncate">{repoOwner}</span>
+              </>
+            )}
+          </nav>
+          <h1 className="pj-display text-[clamp(34px,4vw,52px)] mt-2 break-words">{repoName}</h1>
+          {project.summary?.oneLiner && (
+            <p className="mt-2 text-[15.5px] text-muted max-w-[68ch]">{project.summary.oneLiner}</p>
+          )}
+          <ul className="flex items-center gap-x-2 gap-y-2 text-[13px] text-ink-2 mt-4 flex-wrap" aria-label="Project details">
+            {project.ownership_pct !== undefined && project.ownership_pct !== null && (
+              <li
+                className={cn(
+                  'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[12.5px] font-medium border',
+                  project.ownership_status === 'verified'
+                    ? 'bg-[#E6F5D0] text-[#3F6212] border-[#CFE6AE]'
+                    : 'bg-sheet text-ink-2 border-line'
+                )}
+                title="Share of commits on the default branch made by you"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
                 {project.ownership_status === 'verified'
                   ? `Verified author, ${project.ownership_pct}% of commits`
                   : `${project.ownership_pct}% of commits`}
-              </span>
+              </li>
             )}
-            <span className="inline-flex items-center gap-1 font-mono text-[12px]">
-              <GitBranch className="w-3.5 h-3.5" />
+            <li className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line bg-sheet font-mono text-[12px]">
+              <GitBranch className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
               {project.default_branch || 'main'}
-            </span>
-            {project.commit_sha && <span className="font-mono text-[12px]">{project.commit_sha.slice(0, 7)}</span>}
-            {project.primary_language && <span>{project.primary_language}</span>}
-            {project.file_count !== undefined && <span>{project.file_count} files indexed</span>}
-          </div>
+              {project.commit_sha && (
+                <>
+                  <GitCommitHorizontal className="w-3.5 h-3.5 text-muted ml-1" aria-hidden="true" />
+                  <span title={project.commit_sha}>{project.commit_sha.slice(0, 7)}</span>
+                </>
+              )}
+            </li>
+            {project.primary_language && (
+              <li className="inline-flex items-center h-7 px-2.5 rounded-full border border-line bg-sheet text-[12.5px]">{project.primary_language}</li>
+            )}
+            {project.file_count !== undefined && project.file_count !== null && (
+              <li className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line bg-sheet text-[12.5px]">
+                <FileCode className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
+                {project.file_count} files indexed
+              </li>
+            )}
+          </ul>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <a href={project.repo_url} target="_blank" rel="noopener noreferrer" className="pj-btn pj-btn-ghost !min-h-[36px] !px-3.5 text-[13px]">
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
             GitHub
           </a>
           <Button size="sm" onClick={() => { setDialogError(null); setDialog('resync'); }} icon={<RefreshCw className="w-3.5 h-3.5" />} className="h-9">
@@ -254,28 +301,35 @@ export default function ProjectWorkspacePage() {
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
         </div>
-      </div>
+      </header>
 
-      {isReady && <FlowSteps summary={learning} activeTab={activeTab} onGo={(t) => setTab(t)} />}
+      {isReady && <FlowSteps steps={steps} loaded={!!learning} activeTab={activeTab} onGo={(t) => setTab(t)} />}
 
-      {/* Pill tabs */}
+      {/* Pill tabs: explore the code, then learn it */}
       <div className="max-w-full overflow-x-auto -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div role="tablist" aria-label="Project sections" className="flex p-1 gap-0.5 rounded-full border border-line bg-sheet text-[14px] font-medium w-max">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === t.id}
-              disabled={!isReady && t.id !== 'overview'}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'h-9 px-4 rounded-full transition-colors duration-200 whitespace-nowrap cursor-pointer disabled:cursor-not-allowed disabled:text-[#A8A39A]',
-                activeTab === t.id ? 'bg-olive text-[#F6F8EC] shadow-pill' : 'text-ink-2 hover:bg-paper'
-              )}
-            >
-              {t.label}
-            </button>
+        <div role="tablist" aria-label="Project sections" className="flex items-center p-1 gap-0.5 rounded-full border border-line bg-sheet text-[14px] font-medium w-max">
+          {TABS.map((t, i) => (
+            <React.Fragment key={t.id}>
+              {i === 3 && <span aria-hidden="true" className="mx-1.5 w-px h-5 bg-line" />}
+              <button
+                type="button"
+                role="tab"
+                id={`tab-${t.id}`}
+                aria-selected={activeTab === t.id}
+                aria-controls="project-tabpanel"
+                disabled={!isReady && t.id !== 'overview'}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  'h-9 px-4 rounded-full transition-colors duration-200 whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:text-[#A8A39A]',
+                  activeTab === t.id ? 'bg-olive text-[#F6F8EC] shadow-pill' : 'text-ink-2 hover:bg-paper'
+                )}
+              >
+                {t.label}
+                {t.id === 'certificate' && isReady && learning && !learning.certificate_code && (
+                  <Lock className="w-3 h-3 opacity-60" aria-label="locked" />
+                )}
+              </button>
+            </React.Fragment>
           ))}
         </div>
       </div>
@@ -292,7 +346,7 @@ export default function ProjectWorkspacePage() {
           }}
         />
       ) : (
-        <div role="tabpanel" aria-label={TABS.find((t) => t.id === activeTab)?.label}>
+        <div role="tabpanel" id="project-tabpanel" aria-labelledby={`tab-${activeTab}`}>
           {activeTab === 'overview' && (
             <OverviewTab
               summary={project.summary || null}
@@ -300,13 +354,39 @@ export default function ProjectWorkspacePage() {
                 setAskQuestion(q);
                 setTab('ask');
               }}
+              onOpenPath={(p) => setTab('files', { path: p })}
+              indexedPaths={indexedPaths}
+              onStartLearning={nextStep ? () => setTab(nextStep.tab) : undefined}
+              startLabel={nextStep?.cta}
             />
           )}
           {activeTab === 'files' && (
             <FilesTab key={`${filePath || ''}:${fileLines?.join('-') || ''}`} files={files} initialFilePath={filePath} initialLines={fileLines} />
           )}
-          {activeTab === 'ask' && <AskTab projectId={id} initialQuestion={askQuestion} files={files} />}
-          {activeTab === 'concepts' && <ConceptsTab projectId={id} onOpenFile={openFile} onChanged={fetchLearning} />}
+          {askVisited && (
+            <div hidden={activeTab !== 'ask'}>
+              <AskTab
+                projectId={id}
+                initialQuestion={askQuestion}
+                files={files}
+                onOpenFile={openFile}
+                suggestions={project.summary?.suggestedQuestions}
+                repoName={repoName}
+              />
+            </div>
+          )}
+          {activeTab === 'concepts' && (
+            <ConceptsTab
+              projectId={id}
+              onOpenFile={openFile}
+              onChanged={fetchLearning}
+              files={files}
+              onAsk={(q) => {
+                setAskQuestion(q);
+                setTab('ask');
+              }}
+            />
+          )}
           {activeTab === 'course' && (
             <CourseTab
               projectId={id}
@@ -378,24 +458,16 @@ export default function ProjectWorkspacePage() {
 /* ------------------------------------------------------------ Flow steps */
 
 type StepState = 'done' | 'active' | 'todo' | 'failed';
+type Step = { tab: TabType; label: string; state: StepState; note: string; cta: string };
 
-function FlowSteps({
-  summary,
-  activeTab,
-  onGo,
-}: {
-  summary: LearningSummary | null;
-  activeTab: TabType;
-  onGo: (t: TabType) => void;
-}) {
-  const s = summary;
+function buildSteps(s: LearningSummary | null): Step[] {
   const course = s?.course;
   const attempt = s?.latest_attempt;
-
-  const steps: { tab: TabType; label: string; state: StepState; note: string }[] = [
+  return [
     {
       tab: 'concepts',
       label: 'Concepts',
+      cta: s?.concepts_status === 'failed' ? 'Retry the concept map' : 'Map the concepts',
       state:
         s?.concepts_status === 'ready' ? 'done' : s?.concepts_status === 'generating' ? 'active' : s?.concepts_status === 'failed' ? 'failed' : 'todo',
       note:
@@ -410,6 +482,7 @@ function FlowSteps({
     {
       tab: 'course',
       label: 'Course',
+      cta: !course ? 'Build the course' : 'Continue the course',
       state: !course
         ? 'todo'
         : course.status === 'failed'
@@ -428,11 +501,12 @@ function FlowSteps({
     {
       tab: 'quiz',
       label: 'Quiz',
+      cta: !attempt ? 'Take the quiz' : attempt.status === 'submitted' ? 'Try the quiz again' : 'Continue the quiz',
       state: !attempt ? 'todo' : attempt.unlocked ? 'done' : attempt.status === 'failed' ? 'failed' : 'active',
       note: !attempt
         ? 'Not started'
         : attempt.status === 'submitted'
-          ? `Attempt ${attempt.attempt_no}: ${attempt.average ?? '-'}`
+          ? `Attempt ${attempt.attempt_no}: ${attempt.average ?? '-'} avg`
           : attempt.status === 'generating'
             ? 'Writing questions…'
             : `Attempt ${attempt.attempt_no} open`,
@@ -440,53 +514,94 @@ function FlowSteps({
     {
       tab: 'certificate',
       label: 'Certificate',
+      cta: 'View the certificate',
       state: s?.certificate_code ? 'done' : 'todo',
-      note: s?.certificate_code ? 'Issued' : 'Locked',
+      note: s?.certificate_code ? 'Issued' : 'Locked until the quiz passes',
     },
   ];
+}
+
+function FlowSteps({
+  steps,
+  loaded,
+  activeTab,
+  onGo,
+}: {
+  steps: Step[];
+  loaded: boolean;
+  activeTab: TabType;
+  onGo: (t: TabType) => void;
+}) {
   const nextIdx = steps.findIndex((st) => st.state !== 'done');
+  const doneCount = steps.filter((st) => st.state === 'done').length;
 
   return (
-    <ol aria-label="Learning steps" className="grid grid-cols-2 md:grid-cols-4 gap-2">
-      {steps.map((st, i) => {
-        const isNext = i === nextIdx;
-        const isOpen = activeTab === st.tab;
-        return (
-          <li key={st.tab} className="min-w-0">
-            <button
-              type="button"
-              onClick={() => onGo(st.tab)}
-              aria-current={isOpen ? 'step' : undefined}
-              className={cn(
-                'w-full h-full text-left flex items-center gap-3 px-3.5 py-3 rounded-[14px] border transition-colors duration-200 cursor-pointer',
-                isOpen ? 'border-ink bg-sheet' : 'border-line bg-sheet hover:border-line-2'
+    <section aria-label="Learning progress" className="pj-card p-2 sm:p-2.5">
+      <ol className="grid grid-cols-2 md:grid-cols-4 gap-1.5 md:gap-0">
+        {steps.map((st, i) => {
+          const isNext = loaded && i === nextIdx;
+          const isOpen = activeTab === st.tab;
+          const done = st.state === 'done';
+          return (
+            <li key={st.tab} className="relative min-w-0">
+              {/* connector to the next step (desktop) */}
+              {i < steps.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'hidden md:block absolute top-1/2 -right-2 w-4 h-px z-[1]',
+                    done ? 'bg-[#9BC46A]' : 'bg-line-2'
+                  )}
+                />
               )}
-            >
-              <span
-                aria-hidden="true"
+              <button
+                type="button"
+                onClick={() => onGo(st.tab)}
+                aria-current={isOpen ? 'step' : undefined}
                 className={cn(
-                  'w-7 h-7 shrink-0 rounded-full grid place-items-center text-[13px] font-medium tabular-nums border',
-                  st.state === 'done'
-                    ? 'bg-[#E6F5D0] border-[#CFE6AE] text-[#3F6212]'
-                    : st.state === 'failed'
-                      ? 'bg-[#FDECEC] border-[#F5CFCF] text-[#B4232C]'
-                      : isNext
-                        ? 'bg-lime border-[#B9D84A] text-ink'
-                        : 'bg-paper border-line text-muted'
+                  'w-full h-full text-left flex items-center gap-3 px-3 py-2.5 md:mx-1 md:w-[calc(100%-8px)] rounded-[14px] border transition-colors duration-200 cursor-pointer',
+                  isOpen ? 'border-ink bg-sheet' : isNext ? 'border-[#DCEBA4] bg-lime-soft hover:border-[#B9D84A]' : 'border-transparent hover:bg-paper-2'
                 )}
               >
-                {st.state === 'done' ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : i + 1}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[14px] font-medium text-ink leading-tight">{st.label}</span>
-                <span className={cn('block text-[12.5px] truncate', st.state === 'failed' ? 'text-[#B4232C]' : 'text-muted')}>
-                  {summary ? st.note : ' '}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'w-8 h-8 shrink-0 rounded-full grid place-items-center text-[13px] font-medium tabular-nums border',
+                    done
+                      ? 'bg-[#3F7F1F] border-[#3F7F1F] text-white'
+                      : st.state === 'failed'
+                        ? 'bg-[#FDECEC] border-[#F5CFCF] text-[#B4232C]'
+                        : isNext
+                          ? 'bg-lime border-[#B9D84A] text-ink'
+                          : 'bg-paper border-line text-muted'
+                  )}
+                >
+                  {done ? (
+                    <Check className="w-4 h-4" strokeWidth={2.75} />
+                  ) : st.state === 'failed' ? (
+                    <AlertCircle className="w-4 h-4" />
+                  ) : (
+                    i + 1
+                  )}
                 </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[14px] font-medium text-ink leading-tight">
+                    {st.label}
+                    {isNext && loaded && <span className="text-[11.5px] font-medium text-[#4A5A1E]">Next</span>}
+                  </span>
+                  <span className={cn('block text-[12.5px] truncate', st.state === 'failed' ? 'text-[#B4232C]' : 'text-muted')}>
+                    {loaded ? st.note : ' '}
+                  </span>
+                  <span className="sr-only">{done ? ', done' : st.state === 'failed' ? ', failed' : isNext ? ', next step' : ''}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="sr-only" aria-live="polite">
+        {loaded ? `${doneCount} of ${steps.length} steps done.` : ''}
+      </p>
+    </section>
   );
 }
