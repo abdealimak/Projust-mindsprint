@@ -355,8 +355,8 @@ async function main() {
   // facing forward, so the split line runs down the middle of the face
   tg[0] = new Target(); addFigure(tg[0], sampler, N, [-0.08, -0.04, 0]);
   // 1 story: looking down, with the unanswered question above
-  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.8), [0.3, 0.55, 0.06], 1.0, [-0.25, -0.5, 0], false);
-  glyphPoints(tg[1], '?', N - tg[1].i, 1.05, [0.95, 0.72, 0.3], 1);
+  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.8), [0.3, 0.55, 0.06], 1.0, [0.2, -0.05, 0], false);
+  glyphPoints(tg[1], '?', N - tg[1].i, 0.95, [1.3, 1.05, 0.3], 1);
   tg[2] = new Target(); buildGraph(tg[2]);
   tg[3] = new Target(); buildRadar(tg[3]);
   tg[4] = new Target(); buildSeal(tg[4]);
@@ -430,10 +430,10 @@ async function main() {
     U.uM.value = m;
     // anchors follow their sections live
     let r = el.arch.getBoundingClientRect();
-    const headPx = Math.min(r.height * 1.12, H * 0.66, 660);
-    toW(r.left + r.width / 2, r.bottom - headPx * 0.36 + scrollY * 0.22, U.uA.value[0]); U.uS.value[0] = headPx / 2 / ppw;   // + scroll: the head lags behind the page (parallax)
+    const headPx = Math.max(260, Math.min((r.height - 72) / 0.92, H * 0.68, 680));   // cap top stays 72px under the stage top (below the buttons)
+    toW(r.left + r.width / 2, r.bottom - headPx * 0.36 + scrollY * 0.08, U.uA.value[0]); U.uS.value[0] = headPx / 2 / ppw;   // + scroll: the head lags behind the page (parallax)
     r = el.story.getBoundingClientRect();
-    toW(r.left + r.width / 2, r.top + r.height * 0.44, U.uA.value[1]); U.uS.value[1] = r.height / 2.9 / ppw;
+    toW(r.left + r.width / 2, r.top + r.height * 0.46, U.uA.value[1]); U.uS.value[1] = r.height / 2.9 / ppw;
     r = el.app.getBoundingClientRect();
     toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[2]); U.uS.value[2] = r.width / 2 / ppw;
     const ctm = el.radar.getScreenCTM();
