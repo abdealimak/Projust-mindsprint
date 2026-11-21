@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Projust tokens — "security print" direction. See docs/DESIGN.md.
+   Light theme only (product requirement). 60-30-10:
+   paper (canvas) / sheet + rule (structure) / seal (accent)
+------------------------------------------------------------------- */
+:root {
+  --paper: #f3f5f4;
+  --paper-2: #e9eceb;
+  --sheet: #ffffff;
+  --rule: #dde2e0;
+  --rule-strong: #c6cdca;
+  --ink: #14181f;
+  --ink-2: #596170;
+  --ink-3: #6b7280;
+  --seal: #2f3fd0;
+  --seal-soft: #e8eafb;
+  --pass: #1e8a5a;
+  --pass-soft: #e3f3eb;
+  /* pop: highlighter. Fill only (behind ink text), never as text colour. */
+  --mark: #e2ff5c;
+  --mark-soft: #f3ffbf;
+  --warn: #b4232c;
+  --warn-soft: #fbeaea;
+
+  --shadow-soft: 0 1px 3px rgba(20, 24, 31, 0.05), 0 8px 24px rgba(20, 24, 31, 0.05);
+  --shadow-lift: 0 2px 6px rgba(20, 24, 31, 0.06), 0 24px 48px rgba(20, 24, 31, 0.07);
+
+  /* motion tokens (mirrored in lib/motion.ts) */
+  --motion-100: 100ms;
+  --motion-150: 150ms;
+  --motion-200: 200ms;
+  --motion-300: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-sheet: var(--sheet);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-seal: var(--seal);
+  --color-seal-soft: var(--seal-soft);
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-mark: var(--mark);
+  --color-mark-soft: var(--mark-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-newsreader);
+
+  /* type scale: minor third from 16px body */
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.4;
+  --text-secondary: 0.875rem;
+  --text-secondary--line-height: 1.55;
+  --text-body: 1rem;
+  --text-body--line-height: 1.55;
+  --text-lead: 1.2rem;
+  --text-lead--line-height: 1.5;
+  --text-h3: 1.44rem;
+  --text-h3--line-height: 1.25;
+  --text-h2: clamp(2.07rem, 1.4rem + 2.4vw, 3.58rem);
+  --text-h2--line-height: 1.08;
+  --text-h1: clamp(2.6rem, 1.5rem + 3.6vw, 4.6rem);
+  --text-h1--line-height: 1.02;
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lift: var(--shadow-lift);
+}
+
+html {
+  background: var(--paper);
+  color-scheme: light;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+.font-display {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: var(--mark);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* caret used in typing scenes (functional: shows "someone is typing") */
+@keyframes caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  background: currentColor;
+  vertical-align: -0.15em;
+  margin-left: 1px;
+  animation: caret 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* highlighter swipe: a marker stroke behind a phrase, drawn left to right */
+.mark {
+  position: relative;
+  white-space: nowrap;
+  isolation: isolate;
+}
+.mark::before {
+  content: "";
+  position: absolute;
+  inset: 0.12em -0.12em 0.02em -0.12em;
+  z-index: -1;
+  background: var(--mark);
+  border-radius: 0.18em 0.32em 0.22em 0.4em;
+  transform: scaleX(var(--mark-p, 1)) skewX(-6deg);
+  transform-origin: left center;
+}
+
+/* engineering-notebook dot grid, faded at the edges */
+.dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(20, 24, 31, 0.13) 1px, transparent 0);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 80%);
+}
+
+/* live ticker (functional: shows ongoing activity). Pauses on hover. */
+@keyframes ticker {
+  to { transform: translateX(-50%); }
+}
+.ticker-track {
+  animation: ticker 60s linear infinite;
+}
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track { animation: none; }
+}
