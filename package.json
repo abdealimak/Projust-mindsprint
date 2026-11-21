@@ -9,18 +9,36 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.122",
+    "@octokit/rest": "^22.0.1",
+    "@primer/octicons-react": "^19.42.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.2",
+    "ai": "^7.0.179",
+    "clsx": "^2.1.1",
+    "firebase": "^13.4.0",
+    "lucide-react": "^1.77.0",
+    "next": "14.2.18",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.18"
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.11.0",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^4.6.0",
+    "tailwind-merge": "^3.7.1",
+    "tar-stream": "^3.2.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/tar-stream": "^3.1.5",
+    "autoprefixer": "^10.7.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.18",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.18"
+    "typescript": "^5"
   }
 }
