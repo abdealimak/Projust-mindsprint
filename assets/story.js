@@ -228,7 +228,7 @@ function capPoint(v, nn) {
 function addFigure(t, sampler, count, rot, scale = 1, off = [0, 0, 0], cap = true) {
   const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rot[0], rot[1], rot[2], 'YXZ'));
   const v = new THREE.Vector3(), nn = new THREE.Vector3(), cl = new THREE.Color();
-  const nHead = Math.round(count * (cap ? 0.9 : 1));
+  const nHead = Math.round(count * (cap ? 0.87 : 1));
   for (let c = 0; c < count; c++) {
     let kind = 0, hollow = 0, base = 1;
     if (c < nHead) {
@@ -236,7 +236,8 @@ function addFigure(t, sampler, count, rot, scale = 1, off = [0, 0, 0], cap = tru
       base = smooth(-1.0, -0.62, v.y);               // shoulders dissolve, no hard cut line
     } else kind = capPoint(v, nn);
     v.applyMatrix4(R); nn.transformDirection(R);
-    let sh = shadeAt(v, nn, hollow, base); if (kind === 1) sh = Math.max(sh, 0.75);
+    let sh = shadeAt(v, nn, hollow, base);
+    if (c >= nHead) sh = kind === 1 ? 0.95 : 0.62 + Math.random() * 0.33;   // the cap is solid ink so it reads at any angle
     t.push(v.x * scale + off[0], v.y * scale + off[1], v.z * scale + off[2], kind, sh);
   }
 }
@@ -354,8 +355,8 @@ async function main() {
   // facing forward, so the split line runs down the middle of the face
   tg[0] = new Target(); addFigure(tg[0], sampler, N, [-0.08, -0.04, 0]);
   // 1 story: looking down, with the unanswered question above
-  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.74), [0.42, 0.7, 0], 1.0, [-0.2, -0.55, 0], false);
-  glyphPoints(tg[1], '?', N - tg[1].i, 1.25, [0.85, 0.75, 0.3], 1);
+  tg[1] = new Target(); addFigure(tg[1], sampler, Math.round(N * 0.8), [0.3, 0.55, 0.06], 1.0, [-0.25, -0.5, 0], false);
+  glyphPoints(tg[1], '?', N - tg[1].i, 1.05, [0.95, 0.72, 0.3], 1);
   tg[2] = new Target(); buildGraph(tg[2]);
   tg[3] = new Target(); buildRadar(tg[3]);
   tg[4] = new Target(); buildSeal(tg[4]);
@@ -432,7 +433,7 @@ async function main() {
     const headPx = Math.min(r.height * 1.12, H * 0.66, 660);
     toW(r.left + r.width / 2, r.bottom - headPx * 0.36 + scrollY * 0.22, U.uA.value[0]); U.uS.value[0] = headPx / 2 / ppw;   // + scroll: the head lags behind the page (parallax)
     r = el.story.getBoundingClientRect();
-    toW(r.left + r.width / 2, r.top + r.height * 0.5, U.uA.value[1]); U.uS.value[1] = r.height * 0.95 / 3.2 / ppw;
+    toW(r.left + r.width / 2, r.top + r.height * 0.44, U.uA.value[1]); U.uS.value[1] = r.height / 2.9 / ppw;
     r = el.app.getBoundingClientRect();
     toW(r.left + r.width / 2, r.top + r.height / 2, U.uA.value[2]); U.uS.value[2] = r.width / 2 / ppw;
     const ctm = el.radar.getScreenCTM();
