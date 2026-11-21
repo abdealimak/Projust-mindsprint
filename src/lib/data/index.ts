@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import {
   Profile,
   Project,
@@ -51,8 +52,9 @@ export async function getProfile(): Promise<Profile> {
         email: user.email,
         headline: null,
         bio: null,
-        github_username: null,
-        github_connected: false,
+        // Set by /api/github/save-token when GitHub was linked at sign-in or from the import page
+        github_username: cookies().get('projust_gh_user')?.value || null,
+        github_connected: Boolean(cookies().get('projust_gh_token')?.value),
         linkedin_url: null,
         created_at: new Date().toISOString(),
       };

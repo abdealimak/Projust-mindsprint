@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FolderGit2,
@@ -11,8 +11,10 @@ import {
   Link as LinkIcon,
   AlertCircle,
   Plus,
+  Loader2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { connectGitHubAccount } from '@/lib/firebase/auth';
 
 interface RepoItem {
   id: number;
@@ -35,6 +37,7 @@ export default function NewProjectPage() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [repos, setRepos] = useState<RepoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hideForks, setHideForks] = useState(false);
   const [importingRepo, setImportingRepo] = useState<string | null>(null);
@@ -53,24 +56,45 @@ export default function NewProjectPage() {
     }
   }, []);
 
-  useEffect(() => {
-    async function loadRepos() {
-      try {
-        const res = await fetch('/api/github/repos');
-        const data = await res.json();
-        setConnected(data.connected);
-        if (data.repos) {
-          setRepos(data.repos);
-        }
-      } catch (err) {
-        console.error('Error fetching repos:', err);
-        setConnected(false);
-      } finally {
-        setLoading(false);
+  const loadRepos = useCallback(async () => {
+    try {
+      const res = await fetch('/api/github/repos');
+      const data = await res.json();
+      setConnected(data.connected);
+      if (data.repos) {
+        setRepos(data.repos);
       }
+    } catch (err) {
+      console.error('Error fetching repos:', err);
+      setConnected(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Clean up any stale query params (like old OAuth redirect errors)
+    if (typeof window !== 'undefined' && window.location.search.includes('error=')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
     }
     loadRepos();
-  }, []);
+  }, [loadRepos]);
+
+  const handleConnectGitHub = async (scope: 'public' | 'private' = 'public') => {
+    setErrorMsg(null);
+    setConnecting(true);
+    try {
+      await connectGitHubAccount(scope);
+      await loadRepos();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'GitHub connection failed';
+      setErrorMsg(msg);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const handleImport = async (repoFullName?: string, repoUrl?: string) => {
     setErrorMsg(null);
@@ -185,19 +209,30 @@ export default function NewProjectPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                <a
-                  href="/api/github/connect?scope=public"
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-xs font-medium transition shadow-xs flex items-center justify-center gap-2"
+                <button
+                  type="button"
+                  disabled={connecting}
+                  onClick={() => handleConnectGitHub('public')}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <span>Connect GitHub (Public repos)</span>
-                </a>
-                <a
-                  href="/api/github/connect?scope=private"
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-medium transition flex items-center justify-center gap-1.5"
+                  {connecting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <span>Connect GitHub (Public repos)</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={connecting}
+                  onClick={() => handleConnectGitHub('private')}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Also allow private repos</span>
-                </a>
+                </button>
               </div>
             </div>
           ) : (

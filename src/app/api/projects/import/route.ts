@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getGithubClient } from '@/lib/github/client';
@@ -50,9 +51,25 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    const ghUsername: string | null = null;
+    // GitHub username saved at sign-in/connect time (httpOnly cookie set by /api/github/save-token)
+    let ghUsername: string | null = cookies().get('projust_gh_user')?.value || null;
 
     const supabase = createClient();
+
+    if (!ghUsername) {
+      try {
+        const { data: conn } = await supabase
+          .from('github_connections')
+          .select('github_username')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (conn?.github_username) {
+          ghUsername = conn.github_username;
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     // Check if project already exists for this user
     const { data: existing } = await supabase

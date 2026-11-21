@@ -2,7 +2,9 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  linkWithPopup,
   GoogleAuthProvider,
+  type UserCredential,
   type AuthProvider,
   GithubAuthProvider,
   signOut as firebaseSignOut,
@@ -27,6 +29,7 @@ async function signInWith(provider: AuthProvider): Promise<User | null> {
   try {
     const result = await signInWithPopup(auth, provider);
     await syncSessionCookie(result.user);
+    await saveGitHubTokenFrom(result);
     return result.user;
   } catch (err) {
     if (authErrorCode(err) === 'auth/popup-blocked') {
@@ -46,7 +49,63 @@ export async function completeRedirectSignIn(): Promise<User | null> {
   const result = await getRedirectResult(getFirebaseAuth());
   if (!result) return null;
   await syncSessionCookie(result.user);
+  await saveGitHubTokenFrom(result);
   return result.user;
+}
+
+/**
+ * After a GitHub sign-in, store the GitHub access token (encrypted, server-side) so repo
+ * imports can use it. Best effort: sign-in still succeeds if this fails.
+ */
+async function saveGitHubTokenFrom(
+  result: UserCredential,
+  scopes = 'read:user public_repo'
+): Promise<{ username?: string; token?: string }> {
+  const token = GithubAuthProvider.credentialFromResult(result)?.accessToken;
+  if (!token) return {};
+  try {
+    const res = await fetch('/api/github/save-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, scopes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { username: data.username, token };
+  } catch (err) {
+    console.warn('Could not save the GitHub repo access token:', err);
+    return { token };
+  }
+}
+
+/**
+ * Connect (link) a GitHub account while already signed in, using a Firebase popup,
+ * so no separate GitHub OAuth app is needed.
+ */
+export async function connectGitHubAccount(scope: 'public' | 'private' = 'public') {
+  const auth = getFirebaseAuth();
+  const provider = new GithubAuthProvider();
+  provider.addScope('read:user');
+  provider.addScope(scope === 'private' ? 'repo' : 'public_repo');
+
+  let result: UserCredential;
+  if (auth.currentUser) {
+    try {
+      result = await linkWithPopup(auth.currentUser, provider);
+    } catch (linkErr) {
+      // Already linked, or the GitHub account belongs to this user under another login: sign in with it
+      try {
+        result = await signInWithPopup(auth, provider);
+      } catch {
+        throw linkErr;
+      }
+    }
+  } else {
+    result = await signInWithPopup(auth, provider);
+  }
+
+  await syncSessionCookie(result.user);
+  const saved = await saveGitHubTokenFrom(result, scope === 'private' ? 'read:user repo' : 'read:user public_repo');
+  return { user: result.user, ...saved };
 }
 
 function authErrorCode(err: unknown): string | null {

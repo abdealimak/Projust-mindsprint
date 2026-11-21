@@ -59,5 +59,8 @@ export async function DELETE() {
   store.set(SESSION_COOKIE, '', { path: '/', maxAge: 0 });
   store.set('projust_user', '', { path: '/', maxAge: 0 });
   store.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 });
+  // GitHub token/username cookies belong to this user; don't hand them to the next sign-in
+  store.set('projust_gh_token', '', { path: '/', maxAge: 0 });
+  store.set('projust_gh_user', '', { path: '/', maxAge: 0 });
   return NextResponse.json({ ok: true });
 }

@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const clientId = process.env.GITHUB_REPO_CLIENT_ID;
 
   if (!clientId) {
-    return NextResponse.redirect(`${origin}/projects/new?error=GITHUB_REPO_CLIENT_ID_not_configured`);
+    return NextResponse.redirect(`${origin}/projects/new`);
   }
 
   const state = crypto.randomBytes(24).toString('hex');
