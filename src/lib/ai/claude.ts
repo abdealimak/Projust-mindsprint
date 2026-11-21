@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { z } from 'zod';
+import { recordUsage } from './usage';
 
 /**
  * Claude (Anthropic API) as the primary model for every AI step: repo summary at ingestion,
@@ -62,9 +63,11 @@ export async function claudeJSON<T extends z.ZodType>(opts: {
       effort: opts.fast ? EFFORT_FAST : EFFORT_MAIN,
       format: betaZodOutputFormat(opts.schema),
     },
-    system: opts.system,
+    // Cache the system prompt: it repeats across every chunk, lesson and question of a step
+    system: [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: opts.prompt }],
   });
+  recordUsage(response.model, response.usage);
 
   if (response.stop_reason === 'refusal') {
     throw new ClaudeUnusableReply(`Claude declined (${response.stop_details?.category ?? 'no category'})`);
@@ -95,7 +98,7 @@ export function claudeTextStreamResponse(opts: {
     fallbacks: 'default',
     thinking: { type: 'adaptive' },
     output_config: { effort: EFFORT_MAIN },
-    system: opts.system,
+    system: [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: opts.prompt }],
   });
 
@@ -111,6 +114,7 @@ export function claudeTextStreamResponse(opts: {
           }
         }
         const final = await stream.finalMessage();
+        recordUsage(final.model, final.usage, 'tutor');
         if (final.stop_reason === 'refusal') {
           const note = '\n\n_The tutor could not answer this one. Try rephrasing the question._';
           full += note;

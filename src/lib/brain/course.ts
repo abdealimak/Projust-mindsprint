@@ -1,3 +1,4 @@
+import { withUsage } from '@/lib/ai/usage';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateJSON } from './llm';
@@ -85,7 +86,7 @@ async function loadConcepts(projectId: string): Promise<ConceptRow[]> {
   return (data || []) as ConceptRow[];
 }
 
-export async function generateCourse(courseId: string, projectId: string, userId: string, level: Level): Promise<void> {
+async function generateCourseRun(courseId: string, projectId: string, userId: string, level: Level): Promise<void> {
   const supabase = createClient();
   const save = (patch: Record<string, unknown>) =>
     supabase.from('courses').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', courseId).eq('user_id', userId);
@@ -152,6 +153,7 @@ export async function generateCourse(courseId: string, projectId: string, userId
               .map((c) => `=== CONCEPT key=${c.key}\n${c.name} (${c.category}, ${c.difficulty})\n${c.description}\n\nCODE EXCERPT:\n${excerptFor(c, fileMap, 7000)}`)
               .join('\n\n')}`,
             maxOutputTokens: Math.min(16000, 3200 * cs.length),
+            fast: true, // low effort: lessons/questions follow a tight brief, cheaper at good quality
             temperature: 0.4,
           });
           got = res.lessons;
@@ -180,6 +182,7 @@ export async function generateCourse(courseId: string, projectId: string, userId
             system: LESSON_SYSTEM,
             prompt: `Repository: ${project?.repo_full_name}\nModule: ${mod.title}\n${levelNote[level]}\nConcept: ${c.name} (${c.category}, ${c.difficulty})\n${c.description}\n\nCODE EXCERPT:\n${excerptFor(c, fileMap)}`,
             maxOutputTokens: 3000,
+            fast: true, // low effort: lessons/questions follow a tight brief, cheaper at good quality
             temperature: 0.4,
           });
           lesson = { id: `${mod.id}-${key}`, title: l.title, minutes: l.minutes, body_md: l.body_md, code_refs: c.files, check_questions: l.check_questions };
@@ -199,4 +202,9 @@ export async function generateCourse(courseId: string, projectId: string, userId
     console.error('[brain] course failed:', err);
     await save({ status: 'failed', status_detail: msg });
   }
+}
+
+/** generateCourse with its token usage saved per project. */
+export function generateCourse(courseId: string, projectId: string, userId: string, level: Level): Promise<void> {
+  return withUsage({ projectId, step: 'course' }, () => generateCourseRun(courseId, projectId, userId, level));
 }

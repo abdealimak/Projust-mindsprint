@@ -1,3 +1,4 @@
+import { withUsage } from '@/lib/ai/usage';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateJSON, mapLimit } from './llm';
@@ -105,7 +106,7 @@ export function topoOrder(items: { key: string }[], deps: Map<string, string[]>)
   return out;
 }
 
-export async function generateConcepts(projectId: string, userId: string): Promise<void> {
+async function generateConceptsRun(projectId: string, userId: string): Promise<void> {
   const supabase = createClient();
   const setStatus = (status: string, detail: string, progress: number) =>
     supabase
@@ -196,4 +197,9 @@ export async function generateConcepts(projectId: string, userId: string): Promi
     console.error('[brain] concepts failed:', err);
     await setStatus('failed', msg, 0);
   }
+}
+
+/** generateConcepts with its token usage saved per project. */
+export function generateConcepts(projectId: string, userId: string): Promise<void> {
+  return withUsage({ projectId, step: 'concepts' }, () => generateConceptsRun(projectId, userId));
 }

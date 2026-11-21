@@ -1,3 +1,4 @@
+import { withUsage } from '@/lib/ai/usage';
 import { z } from 'zod';
 import { randomInt } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
@@ -80,7 +81,7 @@ function pickRef(refs: CodeRef[], files: Map<string, SourceFile>): (CodeRef & { 
   return null;
 }
 
-export async function generateQuiz(attemptId: string, projectId: string, userId: string, attemptNo: number): Promise<void> {
+async function generateQuizRun(attemptId: string, projectId: string, userId: string, attemptNo: number): Promise<void> {
   const supabase = createClient();
   const save = (patch: Record<string, unknown>) => supabase.from('quiz_attempts').update(patch).eq('id', attemptId).eq('user_id', userId);
 
@@ -166,6 +167,7 @@ ${asked.map((a) => `- ${a}`).join('\n') || '- none'}`;
             prompt: `${avoid}\n\n${pair.map((p, k) => `=== QUESTION ${k + 1}\n${slotBrief(p.s, ctx[k].context)}`).join('\n\n')}`,
             temperature: 0.6,
             maxOutputTokens: 4000,
+            fast: true, // low effort: lessons/questions follow a tight brief, cheaper at good quality
           });
           return pair.map((p, k) => {
             try {
@@ -193,6 +195,7 @@ ${asked.map((a) => `- ${a}`).join('\n') || '- none'}`;
             prompt: `${slotBrief(slot, context)}\n\n${avoid}`,
             temperature: 0.6,
             maxOutputTokens: 1800,
+            fast: true, // low effort: lessons/questions follow a tight brief, cheaper at good quality
           });
           return build(slot, q, code, i);
         } catch (err) {
@@ -280,4 +283,9 @@ ${trimmed.slice(0, 4000).replace(/<\/?answer>/gi, '')}
   // Keep rubric rows aligned with the stored rubric.
   const hits = q.rubric.map((r, i) => ({ point: r.point, hit: Boolean(g.rubric_hits[i]?.hit) }));
   return { answer: trimmed, score: Math.round(g.score), feedback_md: g.feedback_md, study_tip: g.study_tip, rubric_hits: hits, graded_at: now };
+}
+
+/** generateQuiz with its token usage saved per project. */
+export function generateQuiz(attemptId: string, projectId: string, userId: string, attemptNo: number): Promise<void> {
+  return withUsage({ projectId, step: 'quiz' }, () => generateQuizRun(attemptId, projectId, userId, attemptNo));
 }

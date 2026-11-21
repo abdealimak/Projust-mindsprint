@@ -1,4 +1,5 @@
 'use client';
+import { markLearningDay } from '@/components/dashboard/Streak';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -49,6 +50,7 @@ interface Props {
 type View = { kind: 'home' } | { kind: 'play'; attemptId: string } | { kind: 'results'; attemptId: string };
 
 export function QuizTab({ projectId, conceptsReady, onGoToConcepts, onGoToCourse, onChanged }: Props) {
+  useEffect(() => markLearningDay(projectId, 'quiz'), [projectId]);
   const [attempts, setAttempts] = useState<QuizAttempt[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);

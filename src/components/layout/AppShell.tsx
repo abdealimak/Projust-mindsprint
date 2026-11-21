@@ -48,7 +48,7 @@ export function AppShell({
   }, [sidebarOpen]);
 
   return (
-    <div className="min-h-screen bg-paper text-ink flex flex-row">
+    <div className="h-[100dvh] overflow-clip bg-paper text-ink flex flex-row">
       <a
         href="#app-main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-full focus:bg-ink focus:text-paper focus:text-[14px]"
@@ -72,7 +72,7 @@ export function AppShell({
         onOpenSearch={() => setSearchOpen(true)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-clip">
         <AppHeader
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((o) => !o)}

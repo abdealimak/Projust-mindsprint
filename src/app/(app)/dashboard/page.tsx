@@ -4,6 +4,7 @@ import { getProfile, getProjects, getLearningSummaries, getCertificates } from '
 import { PromptBar } from '@/components/dashboard/PromptBar';
 import { ProjectsPanel } from '@/components/dashboard/ProjectsPanel';
 import { NextStepCard } from '@/components/dashboard/NextStepCard';
+import { StreakNudge } from '@/components/dashboard/Streak';
 import { featuredSummary } from '@/components/dashboard/journey';
 import { FolderGit2, MessagesSquare, GraduationCap, Award, ArrowUpRight } from 'lucide-react';
 
@@ -72,6 +73,8 @@ export default async function DashboardPage() {
           <p className="mt-4 sm:mt-5 text-[16px] sm:text-[17px] leading-relaxed text-muted max-w-[54ch]">
             Import a project, learn the parts you leaned on AI for, and earn a certificate scored on six skills.
           </p>
+
+          <StreakNudge />
 
           {isDemo && (
             <div className="mt-5 inline-flex items-start gap-2.5 text-[13.5px] text-ink-2 px-3.5 py-2.5 rounded-2xl bg-sheet border border-line">

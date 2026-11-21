@@ -1,3 +1,4 @@
+import { withUsage } from '@/lib/ai/usage';
 import { createClient } from '@/lib/supabase/server';
 import type {
   AspectScores,
@@ -231,7 +232,7 @@ export async function answerQuestion(attemptId: string, userId: string, question
 
   let graded: GradedAnswer;
   try {
-    graded = await gradeAnswer(q, answer);
+    graded = await withUsage({ projectId: row.project_id, step: 'grade' }, () => gradeAnswer(q, answer));
   } catch (err) {
     console.error('[brain] grading failed:', err);
     throw new BrainError('Grading is busy right now. Try submitting this answer again.', 503);

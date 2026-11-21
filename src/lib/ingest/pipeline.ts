@@ -1,3 +1,4 @@
+import { withUsage } from '@/lib/ai/usage';
 import zlib from 'zlib';
 import tar from 'tar-stream';
 import { generateJSON } from '@/lib/brain/llm';
@@ -17,7 +18,7 @@ interface PipelineOptions {
   username?: string | null;
 }
 
-export async function runIngestionPipeline({
+async function runIngestionPipelineRun({
   projectId,
   octokit,
   owner,
@@ -49,6 +50,21 @@ export async function runIngestionPipeline({
       branch: defaultBranch,
     });
     const commitSha = branchData.commit.sha;
+
+    // Re-sync with no new commits: files, summary and learning are already current. Skip the
+    // download, re-index and AI summary (saves the summary call and keeps concepts as they are).
+    const { data: current } = await supabase
+      .from('projects')
+      .select('commit_sha, file_count, summary')
+      .eq('id', projectId)
+      .maybeSingle();
+    if (current?.commit_sha === commitSha && (current.file_count || 0) > 0 && current.summary) {
+      await supabase
+        .from('projects')
+        .update({ status: 'ready', status_detail: `Up to date with ${commitSha.slice(0, 7)}. Nothing new to sync.`, updated_at: new Date().toISOString() })
+        .eq('id', projectId);
+      return;
+    }
 
     // 2. Download source tarball
     await updateStatus('ingesting', 'Downloading repository archive...');
@@ -278,4 +294,9 @@ export async function runIngestionPipeline({
     await updateStatus('failed', errorMsg);
     throw err;
   }
+}
+
+/** runIngestionPipeline with its token usage saved per project. */
+export function runIngestionPipeline(opts: PipelineOptions) {
+  return withUsage({ projectId: opts.projectId, step: 'summary' }, () => runIngestionPipelineRun(opts));
 }

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --no-warnings tests/feature1.test.ts && node --import ./tests/alias.mjs --experimental-strip-types --no-warnings tests/brain.test.mts && node --import ./tests/alias.mjs --experimental-strip-types --no-warnings tests/claude.test.mts",
+    "test": "node --experimental-strip-types --no-warnings tests/feature1.test.ts && node --import ./tests/alias.mjs --experimental-strip-types --no-warnings tests/brain.test.mts && node --import ./tests/alias.mjs --experimental-strip-types --no-warnings tests/claude.test.mts && node --import ./tests/alias.mjs --experimental-strip-types --no-warnings tests/video-clean.test.mts",
     "demo": "next build && next start"
   },
   "dependencies": {

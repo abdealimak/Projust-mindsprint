@@ -1,4 +1,5 @@
 'use client';
+import { markLearningDay } from '@/components/dashboard/Streak';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Clock, RefreshCw, ArrowLeft, ArrowRight, ChevronDown, BookOpen, FileCode, Undo2 } from 'lucide-react';
@@ -45,6 +46,7 @@ function lessonSummary(md: string): string {
 }
 
 export function CourseTab({ projectId, conceptsReady, onGoToConcepts, onGoToQuiz, onOpenFile, onChanged, files, repo }: Props) {
+  useEffect(() => markLearningDay(projectId, 'course'), [projectId]);
   const [course, setCourse] = useState<Course | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);

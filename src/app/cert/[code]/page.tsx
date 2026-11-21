@@ -31,6 +31,7 @@ export async function generateMetadata({ params }: { params: { code: string } })
   return {
     title: `${cert.code} · ${cert.recipient_name} — Projust certificate`,
     description: `${cert.recipient_name} scored ${Math.round(cert.overall)}/100 on ${cert.repo_full_name}, verified by Projust.`,
+    twitter: { card: 'summary_large_image' },
   };
 }
 

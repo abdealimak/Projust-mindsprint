@@ -1,3 +1,4 @@
+import { withUsage, withUsageSync } from '@/lib/ai/usage';
 import { NextResponse } from 'next/server';
 import { streamText } from 'ai';
 import { generateJSON } from '@/lib/brain/llm';
@@ -84,14 +85,14 @@ export async function POST(
     let candidatePaths: string[] = [];
 
     try {
-      const routeResult = await generateJSON({
+      const routeResult = await withUsage({ projectId, step: 'tutor' }, () => generateJSON({
         schema: FileRouterSchema,
         system: ROUTER_SYSTEM_PROMPT,
         prompt: `Question: ${question}\n\nProject Summary: ${JSON.stringify(project.summary)}\n\nFile Tree:\n${fileTreeSnippet}`,
         fast: true,
         retries: 1,
         maxOutputTokens: 800,
-      });
+      }));
       candidatePaths = routeResult.files.map((f) => f.path);
     } catch {
       // Fallback to highest priority files
@@ -199,12 +200,12 @@ ${question}`;
     };
 
     if (isClaudeConfigured) {
-      return claudeTextStreamResponse({
+      return withUsageSync({ projectId, step: 'tutor' }, () => claudeTextStreamResponse({
         system: ASK_SYSTEM_PROMPT,
         prompt: userPrompt,
         headers: { 'x-thread-id': activeThreadId || '' },
         onFinish: saveAnswer,
-      });
+      }));
     }
 
     const result = streamText({
