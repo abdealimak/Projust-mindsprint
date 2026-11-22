@@ -11,6 +11,7 @@ import {
   Award,
   Compass,
   Briefcase,
+  ClipboardCheck,
   Settings,
   Search,
   LogOut,
@@ -61,6 +62,12 @@ export function AppSidebar({ profile, isOpen = true, onClose, onOpenSearch }: Ap
         { name: 'Certificates', href: '/certificates', icon: Award, active: pathname.startsWith('/certificates') || pathname.startsWith('/cert') },
         { name: 'Explore', href: '/explore', icon: Compass, active: pathname.startsWith('/explore') },
         { name: 'Jobs', href: '/jobs', icon: Briefcase, active: pathname.startsWith('/jobs'), tag: 'Planned' },
+      ],
+    },
+    {
+      label: 'Hire',
+      items: [
+        { name: 'Hiring tools', href: '/hiring', icon: ClipboardCheck, active: pathname.startsWith('/hiring'), tag: 'Beta' },
       ],
     },
   ];

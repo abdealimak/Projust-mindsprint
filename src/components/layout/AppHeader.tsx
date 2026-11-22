@@ -21,6 +21,7 @@ const TITLES: [string, string][] = [
   ['/certificates', 'Certificates'],
   ['/explore', 'Explore'],
   ['/jobs', 'Jobs'],
+  ['/hiring', 'Hiring tools'],
   ['/settings', 'Settings'],
 ];
 
