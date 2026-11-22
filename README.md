@@ -15,6 +15,23 @@ your repo can answer, and a live certificate that teachers and recruiters can ch
 | **Pitch deck** | [`docs/Projust-Pitch.pptx`](docs/Projust-Pitch.pptx) |
 | **Business model** | [`docs/business-model.png`](docs/business-model.png) |
 
+![Projust walkthrough: concept map, course, tutor with citations, quiz feedback and certificate](docs/demo.gif)
+
+<sub>Real app in demo mode: dashboard → concept map → course → cited tutor → quiz feedback → certificate.</sub>
+
+### Screenshots
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Concept map](docs/screenshots/concepts.png) |
+| **Dashboard.** Where you are and what to do next | **Concept map.** Every idea in the repo, pinned to its lines |
+| ![Personal course](docs/screenshots/course.png) | ![Tutor with citations](docs/screenshots/tutor.png) |
+| **Personal course.** Lessons written from your own code | **Tutor.** Answers cite exact files and line ranges |
+| ![Find-the-bug question with feedback](docs/screenshots/quiz-feedback.png) | ![Certificate unlocked](docs/screenshots/results.png) |
+| **Quiz feedback.** Every rubric point shown, 0–100 | **Results.** Six skill scores; certificate unlocks at 60+ |
+| ![Public certificate](docs/screenshots/certificate.png) | ![Hiring tools](docs/screenshots/hiring.png) |
+| **Public certificate.** Verifiable by ID or QR, with version history | **Hiring tools.** Quiz builder and certificate screener for HR |
+
 ---
 
 ## Contents
@@ -241,7 +258,7 @@ src/
 supabase/migrations/      # SQL schema
 tests/                    # node test suites
 public/landing.html       # landing page
-docs/                     # pitch deck and business model image
+docs/                     # pitch deck, business model image, demo GIF, screenshots/
 ```
 
 ## 12. Testing
