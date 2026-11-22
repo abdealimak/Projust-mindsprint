@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
   title: 'Projust — Justice for Honest Builders',
@@ -26,6 +27,8 @@ export default function RootLayout({
       </head>
       <body className="bg-paper text-ink antialiased">
         <ThemeProvider>{children}</ThemeProvider>
+        {/* Vercel Web Analytics: cookieless page views; only active on Vercel */}
+        <Analytics />
       </body>
     </html>
   );

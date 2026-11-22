@@ -10,6 +10,17 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+/**
+ * Same-site sign-in: with NEXT_PUBLIC_FIREBASE_AUTH_PROXY=1 the sign-in helper is served from
+ * this site's own /__/auth/* (proxied to <project>.firebaseapp.com in next.config.mjs), so
+ * browsers that block third-party storage can still finish Google/GitHub sign-in.
+ * Each provider must list https://<this-site>/__/auth/handler as a redirect URI first.
+ */
+function authDomain(): string | undefined {
+  if (process.env.NEXT_PUBLIC_FIREBASE_AUTH_PROXY === '1' && typeof window !== 'undefined') return window.location.host;
+  return firebaseConfig.authDomain;
+}
+
 /** True when the Firebase env vars are present. Without them only demo mode works. */
 export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 
@@ -25,7 +36,7 @@ export function getFirebaseAuth(): Auth {
     throw new Error('Firebase is not configured. Add the NEXT_PUBLIC_FIREBASE_* keys to .env.local.');
   }
   // Prevent re-initialization in hot reload
-  const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  const app: FirebaseApp = getApps().length === 0 ? initializeApp({ ...firebaseConfig, authDomain: authDomain() }) : getApps()[0];
   cachedAuth = getAuth(app);
   return cachedAuth;
 }

@@ -9,6 +9,16 @@ const securityHeaders = [
 
 const nextConfig = {
   poweredByHeader: false,
+  // Firebase sign-in helper served same-site (see src/lib/firebase/config.ts). Next proxies
+  // external rewrites transparently, which Firebase requires (a 302 would not work).
+  async rewrites() {
+    const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    if (!project) return [];
+    return [
+      { source: '/__/auth/:path*', destination: `https://${project}.firebaseapp.com/__/auth/:path*` },
+      { source: '/__/firebase/:path*', destination: `https://${project}.firebaseapp.com/__/firebase/:path*` },
+    ];
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

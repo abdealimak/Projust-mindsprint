@@ -25,6 +25,8 @@ export async function updateSession(request: NextRequest) {
   // Public routes that don't need auth
   const isPublicRoute =
     pathname.startsWith('/login') ||
+    pathname.startsWith('/__/') || // Firebase sign-in helper (proxied)
+    pathname.startsWith('/_vercel/') || // Vercel Web Analytics
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/u/') ||
