@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { withUserAI } from '@/lib/ai/user-settings';
 import { projectCtx, json, fail, readJson } from '@/lib/brain/route';
 import { getCourse, startCourse } from '@/lib/brain/service';
 import { demoConcepts, demoCourse, demoStartCourse } from '@/lib/brain/demo';
 import type { Level } from '@/lib/brain/course';
+
+/** AI jobs started here can run for minutes (serverless hosts stop functions at this limit). */
+export const maxDuration = 300;
 
 const LEVELS: Level[] = ['beginner', 'intermediate', 'advanced'];
 
@@ -26,7 +30,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       if (demoConcepts(ctx.user.uid).status !== 'ready') return json({ error: 'Map the concepts before building the course.' }, 409);
       return json({ course: demoStartCourse(ctx.user.uid) });
     }
-    return json({ course: await startCourse(ctx.projectId, ctx.user.uid, level, Boolean(body.regenerate)) });
+    return json({ course: await withUserAI(() => startCourse(ctx.projectId, ctx.user.uid, level, Boolean(body.regenerate))) });
   } catch (err) {
     return fail(err);
   }

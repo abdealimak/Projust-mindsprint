@@ -5,6 +5,7 @@ import { PromptBar } from '@/components/dashboard/PromptBar';
 import { ProjectsPanel } from '@/components/dashboard/ProjectsPanel';
 import { NextStepCard } from '@/components/dashboard/NextStepCard';
 import { StreakNudge } from '@/components/dashboard/Streak';
+import { AIStatusCard } from '@/components/dashboard/AIStatusCard';
 import { featuredSummary } from '@/components/dashboard/journey';
 import { FolderGit2, MessagesSquare, GraduationCap, Award, ArrowUpRight } from 'lucide-react';
 
@@ -75,6 +76,8 @@ export default async function DashboardPage() {
           </p>
 
           <StreakNudge />
+
+          <AIStatusCard />
 
           {isDemo && (
             <div className="mt-5 inline-flex items-start gap-2.5 text-[13.5px] text-ink-2 px-3.5 py-2.5 rounded-2xl bg-sheet border border-line">

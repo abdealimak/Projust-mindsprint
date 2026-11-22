@@ -1,9 +1,15 @@
 import crypto from 'crypto';
 
+/** The sample value published in .env.example. Anyone can read it, so production must not use it. */
+export const EXAMPLE_ENCRYPTION_KEY = 'dGhpcy1pcy1hLTMyLWJ5dGUtc2VjcmV0LWtleS0xMjM0NQ==';
+
 function getKey(): Buffer {
   const keyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
   if (!keyBase64) {
     throw new Error('TOKEN_ENCRYPTION_KEY is not defined in environment variables');
+  }
+  if (process.env.NODE_ENV === 'production' && keyBase64 === EXAMPLE_ENCRYPTION_KEY) {
+    throw new Error('TOKEN_ENCRYPTION_KEY is the public example value. Generate your own: openssl rand -base64 32');
   }
   const key = Buffer.from(keyBase64, 'base64');
   if (key.length !== 32) {

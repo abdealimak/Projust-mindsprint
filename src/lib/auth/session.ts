@@ -34,7 +34,16 @@ const GOOGLE_JWKS = createRemoteJWKSet(
 let warnedDevSecret = false;
 function sessionSecret(): Uint8Array {
   const explicit = process.env.SESSION_SECRET;
-  const derived = process.env.TOKEN_ENCRYPTION_KEY ? `projust-session:${process.env.TOKEN_ENCRYPTION_KEY}` : '';
+  const enc = process.env.TOKEN_ENCRYPTION_KEY;
+  // Never sign sessions with a value derived from the public example key in .env.example
+  const exampleKey = enc === 'dGhpcy1pcy1hLTMyLWJ5dGUtc2VjcmV0LWtleS0xMjM0NQ==';
+  if (process.env.NODE_ENV === 'production' && !explicit && exampleKey) {
+    throw new Error('Set SESSION_SECRET (openssl rand -base64 48): TOKEN_ENCRYPTION_KEY is the public example value');
+  }
+  if (process.env.NODE_ENV === 'production' && explicit && explicit.length < 32) {
+    throw new Error('SESSION_SECRET is too short; use at least 32 characters (openssl rand -base64 48)');
+  }
+  const derived = enc ? `projust-session:${enc}` : '';
   const secret = explicit || derived;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {

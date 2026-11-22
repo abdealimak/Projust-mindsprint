@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { streamText } from 'ai';
 import { generateJSON } from '@/lib/brain/llm';
 import { createClient } from '@/lib/supabase/server';
-import { llmModel } from '@/lib/ai/provider';
-import { claudeTextStreamResponse, isClaudeConfigured } from '@/lib/ai/claude';
+import { llmModel, userChatModel, isLlmConfigured } from '@/lib/ai/provider';
+import { claudeTextStreamResponse, claudeAvailable } from '@/lib/ai/claude';
+import { activeAI, withUserAIResponse } from '@/lib/ai/user-settings';
 import { ASK_SYSTEM_PROMPT } from '@/lib/ai/prompts/ask';
 import { ROUTER_SYSTEM_PROMPT } from '@/lib/ai/prompts/router';
 import { FileRouterSchema } from '@/lib/ai/schemas';
@@ -12,7 +13,15 @@ import { parseCitations, formatNumberedFile } from '@/lib/ai/citations';
 import { getCurrentUser } from '@/lib/auth/user';
 import { demoTutorAnswer, isDemoProject } from '@/lib/brain/demo';
 
-export async function POST(
+/** Tutor answers stream for a while; give the function room. */
+export const maxDuration = 300;
+
+export function POST(request: Request, ctx: { params: { id: string } }) {
+  // Run with the signed-in user's AI settings (Settings → AI)
+  return withUserAIResponse(() => handleAsk(request, ctx));
+}
+
+async function handleAsk(
   request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -36,6 +45,14 @@ export async function POST(
         return NextResponse.json({ error: 'Sample data is available for alexchen-dev/shop-api only.' }, { status: 404 });
       }
       return demoTextStream(demoTutorAnswer(question));
+    }
+
+    const ai = activeAI();
+    if (!ai.user && (!ai.allowServer || !isLlmConfigured)) {
+      return NextResponse.json(
+        { error: 'No AI is set up for your account yet. Add your API key in Settings → AI, then ask again.' },
+        { status: 503 }
+      );
     }
 
     const supabase = createClient();
@@ -199,7 +216,7 @@ ${question}`;
       }
     };
 
-    if (isClaudeConfigured) {
+    if (claudeAvailable()) {
       return withUsageSync({ projectId, step: 'tutor' }, () => claudeTextStreamResponse({
         system: ASK_SYSTEM_PROMPT,
         prompt: userPrompt,
@@ -209,7 +226,7 @@ ${question}`;
     }
 
     const result = streamText({
-      model: llmModel,
+      model: ai.user ? userChatModel(ai.user) : llmModel,
       system: ASK_SYSTEM_PROMPT,
       prompt: userPrompt,
       onFinish: ({ text, usage, response }) => {

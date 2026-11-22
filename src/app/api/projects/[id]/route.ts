@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { withUserAI } from '@/lib/ai/user-settings';
+import { runAfterResponse } from '@/lib/server/background';
 import { createClient } from '@/lib/supabase/server';
 import { getOwnedProject } from '@/lib/auth/user';
 import { getGithubClient } from '@/lib/github/client';
 import { runIngestionPipeline } from '@/lib/ingest/pipeline';
+
+/** Ingestion and the repo summary keep running after the response; allow up to 5 minutes. */
+export const maxDuration = 300;
 
 export async function POST(
   request: Request,
@@ -18,14 +23,16 @@ export async function POST(
     const [owner, repo] = project.repo_full_name.split('/');
     const { octokit } = await getGithubClient(project.user_id);
 
-    // Trigger re-ingestion
-    runIngestionPipeline({
-      projectId: id,
-      octokit,
-      owner,
-      repo,
-    }).catch((err) => {
-      console.error(`Resync failed for ${id}:`, err);
+    // Keeps running after the response (Vercel: kept alive via waitUntil), with this user's AI settings
+    await withUserAI(async () => {
+      runAfterResponse(`resync:${id}`, () =>
+        runIngestionPipeline({
+          projectId: id,
+          octokit,
+          owner,
+          repo,
+        })
+      );
     });
 
     return NextResponse.json({ ok: true, message: 'Resync started' });

@@ -16,6 +16,8 @@ import { generateCourse, type Level } from './course';
 import { generateQuiz, gradeAnswer, toPublic, type StoredQuestion } from './quiz';
 import { aspectScores, average, isUnlocked, newCertificateCode, strengthFor } from './score';
 import { isLlmConfigured } from '@/lib/ai/provider';
+import { activeAI } from '@/lib/ai/user-settings';
+import { runAfterResponse } from '@/lib/server/background';
 
 /** Jobs run in-process. If the server restarted mid-job, a "generating" row older than this is failed. */
 const STALE_MS = 15 * 60 * 1000;
@@ -28,11 +30,15 @@ export class BrainError extends Error {
 }
 
 function runInBackground(name: string, job: () => Promise<void>) {
-  job().catch((err) => console.error(`[brain] ${name} crashed:`, err));
+  runAfterResponse(`brain:${name}`, job);
 }
 
 function requireLlm() {
-  if (!isLlmConfigured) throw new BrainError('The AI service is not configured yet. Ask the admin to add an LLM key.', 503);
+  const ai = activeAI();
+  if (ai.user) return; // the user's own key from Settings → AI
+  if (!ai.allowServer || !isLlmConfigured) {
+    throw new BrainError('No AI is set up for your account yet. Add your API key in Settings → AI, then try again.', 503);
+  }
 }
 
 // ── Concepts ────────────────────────────────────────────────────────────────

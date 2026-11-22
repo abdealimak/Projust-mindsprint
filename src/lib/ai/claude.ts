@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { z } from 'zod';
 import { recordUsage } from './usage';
+import { activeAI } from './user-settings';
 
 /**
  * Claude (Anthropic API) as the primary model for every AI step: repo summary at ingestion,
@@ -19,23 +20,55 @@ type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 const EFFORT_MAIN = (process.env.AI_CLAUDE_EFFORT as Effort) || 'medium';
 const EFFORT_FAST = (process.env.AI_CLAUDE_FAST_EFFORT as Effort) || 'low';
 
+/** True when the server itself has a Claude key (ANTHROPIC_API_KEY). */
 export const isClaudeConfigured = Boolean(process.env.ANTHROPIC_API_KEY);
 
 /** On a safety decline, the API re-runs the request on Anthropic's recommended fallback model. */
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+/** Server-side fallbacks exist for these models (not Haiku). */
+const supportsFallback = (model: string) => /^claude-(fable|mythos|opus-5|sonnet-5-5)/.test(model);
 
-let client: Anthropic | null = null;
-function claude(): Anthropic {
-  if (!client) {
-    client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      // Explicit, so a stray ANTHROPIC_BASE_URL in the shell can't reroute the app's traffic
-      baseURL: process.env.AI_CLAUDE_BASE_URL || 'https://api.anthropic.com',
-      maxRetries: 2,
-    });
-  }
-  return client;
+const BASE_URL = process.env.AI_CLAUDE_BASE_URL || 'https://api.anthropic.com';
+let serverClient: Anthropic | null = null;
+const userClients = new Map<string, Anthropic>();
+
+function makeClient(apiKey: string) {
+  // Explicit baseURL, so a stray ANTHROPIC_BASE_URL in the shell can't reroute the app's traffic
+  return new Anthropic({ apiKey, baseURL: BASE_URL, maxRetries: 2 });
 }
+
+/**
+ * Which Claude account and model this request uses: the signed-in user's own key from
+ * Settings → AI, else the server's key (if this user is allowed to use it), else none.
+ */
+function claudeTarget(): { client: Anthropic; model: string; fastModel: string } | null {
+  const ctx = activeAI();
+  if (ctx.user) {
+    if (ctx.user.provider !== 'anthropic') return null;
+    let c = userClients.get(ctx.user.apiKey);
+    if (!c) {
+      if (userClients.size > 200) userClients.clear();
+      c = makeClient(ctx.user.apiKey);
+      userClients.set(ctx.user.apiKey, c);
+    }
+    return { client: c, model: ctx.user.model, fastModel: ctx.user.model };
+  }
+  if (!ctx.allowServer || !isClaudeConfigured) return null;
+  serverClient ??= makeClient(process.env.ANTHROPIC_API_KEY as string);
+  return { client: serverClient, model: CLAUDE_MODEL, fastModel: CLAUDE_FAST_MODEL };
+}
+
+/** Whether this request should go to Claude. */
+export const claudeAvailable = () => claudeTarget() !== null;
+
+function target() {
+  const t = claudeTarget();
+  if (!t) throw new Error('No Claude key is set up. Add one in Settings → AI.');
+  return t;
+}
+
+const fallbackParams = (model: string) =>
+  supportsFallback(model) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {};
 
 /** A Claude reply we can't use (declined, cut off, or failed validation). */
 export class ClaudeUnusableReply extends Error {}
@@ -52,12 +85,13 @@ export async function claudeJSON<T extends z.ZodType>(opts: {
   fast?: boolean;
   maxOutputTokens?: number;
 }): Promise<z.infer<T>> {
-  const response = await claude().beta.messages.parse({
-    model: opts.fast ? CLAUDE_FAST_MODEL : CLAUDE_MODEL,
+  const t = target();
+  const model = opts.fast ? t.fastModel : t.model;
+  const response = await t.client.beta.messages.parse({
+    model,
     // Room for adaptive thinking plus the JSON itself; stays under the non-streaming timeout
     max_tokens: Math.min(16000, Math.max(8000, (opts.maxOutputTokens ?? 4096) * 2)),
-    betas: [FALLBACK_BETA],
-    fallbacks: 'default',
+    ...fallbackParams(model),
     thinking: { type: 'adaptive' },
     output_config: {
       effort: opts.fast ? EFFORT_FAST : EFFORT_MAIN,
@@ -91,11 +125,11 @@ export function claudeTextStreamResponse(opts: {
   headers?: Record<string, string>;
   onFinish?: (text: string) => Promise<void> | void;
 }): Response {
-  const stream = claude().beta.messages.stream({
-    model: CLAUDE_MODEL,
+  const t = target();
+  const stream = t.client.beta.messages.stream({
+    model: t.model,
     max_tokens: 64000,
-    betas: [FALLBACK_BETA],
-    fallbacks: 'default',
+    ...fallbackParams(t.model),
     thinking: { type: 'adaptive' },
     output_config: { effort: EFFORT_MAIN },
     system: [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }],

@@ -1,0 +1,11 @@
+# Never upload local secrets or build output with `vercel deploy`
+.env*
+!.env.example
+.next
+.next-*
+node_modules
+.playwright-mcp
+.claude
+tsconfig.tsbuildinfo
+*.log
+.DS_Store

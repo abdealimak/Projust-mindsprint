@@ -18,10 +18,12 @@ import {
   MailIcon,
   CheckIcon,
   AlertIcon,
+  CpuIcon,
 } from '@primer/octicons-react';
+import { AISettingsPanel } from '@/components/settings/AISettingsPanel';
 
 type SettingsProfile = Profile & { public_profile?: boolean };
-type Tab = 'profile' | 'account' | 'privacy';
+type Tab = 'profile' | 'ai' | 'account' | 'privacy';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'blocked';
 
 const FIELDS = ['username', 'full_name', 'headline', 'bio', 'linkedin_url'] as const;
@@ -76,6 +78,11 @@ const inputBase =
 
 export default function SettingsClient({ initialProfile }: { initialProfile: Profile }) {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
+  // Deep link: /settings?tab=ai (used by the dashboard's AI card)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'ai' || t === 'account' || t === 'privacy' || t === 'profile') setActiveTab(t);
+  }, []);
   const [profile, setProfile] = useState<SettingsProfile>(initialProfile);
   const [isDemo, setIsDemo] = useState(initialProfile.id.startsWith('demo:'));
   const [loading, setLoading] = useState(true);
@@ -257,6 +264,7 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
 
   const tabs: { id: Tab; label: string; short: string; icon: typeof PersonIcon }[] = [
     { id: 'profile', label: 'Profile', short: 'Profile', icon: PersonIcon },
+    { id: 'ai', label: 'AI model', short: 'AI', icon: CpuIcon },
     { id: 'account', label: 'Account & providers', short: 'Account', icon: ShieldCheckIcon },
     { id: 'privacy', label: 'Privacy', short: 'Privacy', icon: EyeIcon },
   ];
@@ -311,6 +319,9 @@ export default function SettingsClient({ initialProfile }: { initialProfile: Pro
           with GitHub or Google.
         </Notice>
       )}
+
+      {/* AI model and key */}
+      {activeTab === 'ai' && <AISettingsPanel />}
 
       {/* Profile */}
       {activeTab === 'profile' && (

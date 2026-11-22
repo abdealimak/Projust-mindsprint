@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
+import { withUserAI } from '@/lib/ai/user-settings';
+import { runAfterResponse } from '@/lib/server/background';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getGithubClient } from '@/lib/github/client';
 import { runIngestionPipeline } from '@/lib/ingest/pipeline';
 import { getCurrentUserId } from '@/lib/auth/user';
+
+/** Ingestion and the repo summary keep running after the response; allow up to 5 minutes. */
+export const maxDuration = 300;
 
 const ImportSchema = z.object({
   repoFullName: z.string().optional(),
@@ -104,15 +109,17 @@ export async function POST(request: Request) {
     // Get GitHub client
     const { octokit } = await getGithubClient(userId);
 
-    // Run ingestion asynchronously
-    runIngestionPipeline({
-      projectId,
-      octokit,
-      owner,
-      repo,
-      username: ghUsername,
-    }).catch((err) => {
-      console.error(`Background ingestion failed for ${projectId}:`, err);
+    // Keeps running after the response (Vercel: kept alive via waitUntil), with this user's AI settings
+    await withUserAI(async () => {
+      runAfterResponse(`ingest:${projectId}`, () =>
+        runIngestionPipeline({
+          projectId,
+          octokit,
+          owner,
+          repo,
+          username: ghUsername,
+        })
+      );
     });
 
     return NextResponse.json({ id: projectId });

@@ -1,7 +1,9 @@
 import { generateText } from 'ai';
 import { z } from 'zod';
-import { llmModel, llmFastModel, hasNonClaudeBackend } from '@/lib/ai/provider';
-import { claudeJSON, isClaudeConfigured } from '@/lib/ai/claude';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
+import { llmModel, llmFastModel, hasNonClaudeBackend, userChatModel } from '@/lib/ai/provider';
+import { claudeJSON, claudeAvailable } from '@/lib/ai/claude';
+import { activeAI } from '@/lib/ai/user-settings';
 import { recordUsage } from '@/lib/ai/usage';
 
 /**
@@ -21,8 +23,17 @@ export async function generateJSON<T extends z.ZodTypeAny>(opts: {
   temperature?: number;
   maxOutputTokens?: number;
 }): Promise<z.infer<T>> {
-  // Claude first (structured outputs, validated by the SDK); the other backends are the fallback.
-  if (isClaudeConfigured) {
+  const ai = activeAI();
+
+  // The user's own settings (Settings → AI) win, and never silently fall back to the server's keys.
+  if (ai.user) {
+    if (ai.user.provider === 'anthropic') return claudeJSON(opts);
+    return jsonFromModel(userChatModel(ai.user), opts);
+  }
+  if (!ai.allowServer) throw new Error('No AI key is set up for your account. Add one in Settings → AI.');
+
+  // Server keys: Claude first (structured outputs, validated by the SDK); the other backends are the fallback.
+  if (claudeAvailable()) {
     try {
       return await claudeJSON(opts);
     } catch (err) {
@@ -30,6 +41,14 @@ export async function generateJSON<T extends z.ZodTypeAny>(opts: {
       console.warn('[ai] Claude failed, using fallback backend:', err instanceof Error ? err.message.slice(0, 200) : err);
     }
   }
+  return jsonFromModel(opts.fast ? llmFastModel : llmModel, opts);
+}
+
+/** JSON from an OpenAI-compatible model: schema described in the prompt, validated, retried with the error. */
+async function jsonFromModel<T extends z.ZodTypeAny>(
+  model: LanguageModelV4,
+  opts: { schema: T; system: string; prompt: string; retries?: number; temperature?: number; maxOutputTokens?: number }
+): Promise<z.infer<T>> {
 
   const jsonSchema = JSON.stringify(z.toJSONSchema(opts.schema));
   const system = `${opts.system}
@@ -43,7 +62,7 @@ ${jsonSchema}`;
 
   for (let attempt = 0; attempt < tries; attempt++) {
     const { text, usage, response } = await generateText({
-      model: opts.fast ? llmFastModel : llmModel,
+      model,
       system,
       prompt,
       temperature: opts.temperature ?? 0.3,

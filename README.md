@@ -217,13 +217,17 @@ All variables are listed with comments in [`.env.example`](.env.example). The ma
 
 | Group | Variables | Notes |
 |---|---|---|
-| Claude | `ANTHROPIC_API_KEY`, `AI_CLAUDE_MODEL`, `AI_CLAUDE_EFFORT` | Primary AI. Default model `claude-opus-5-5` |
+| Per-user AI | Settings → AI (no env var) | Each user can pick a provider and model and add their own key; stored encrypted in their browser |
+| Shared AI access | `SHARED_AI_ALLOWED_EMAILS` | Who may use the server's keys: empty = everyone, `none`, or a comma list of emails |
+| Claude | `ANTHROPIC_API_KEY`, `AI_CLAUDE_MODEL`, `AI_CLAUDE_EFFORT` | Primary shared AI. Default model `claude-opus-5-5` |
 | Fallback AI | `AI_SERVER_*`, `LLM_ALT_*`, `LLM_*` | Any OpenAI-compatible API; tried in that order |
 | GitHub | `GITHUB_REPO_CLIENT_ID`, `GITHUB_REPO_CLIENT_SECRET`, `GITHUB_SERVER_TOKEN` | Repo access app, separate from login |
 | Security | `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET`, `ALLOW_DEMO_MODE` | Generate your own keys with `openssl rand -base64 32` |
 | Limits | `MAX_REPO_ARCHIVE_MB`, `MAX_FILES_PER_PROJECT`, `MAX_FILE_KB`, `ASK_CONTEXT_TOKEN_BUDGET`, `FREE_DAILY_ASK_LIMIT` | Defaults: 25 MB, 400 files, 100 KB, 60k tokens, 20 asks/day |
 | Firebase | `NEXT_PUBLIC_FIREBASE_*` | Auth |
 | Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL` | Database |
+
+**Deploying:** see [docs/DEPLOY.md](docs/DEPLOY.md) (Vercel, env upload without printing secrets, Firebase domains, cost controls).
 
 ## 10. Database
 

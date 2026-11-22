@@ -1,5 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModelV4 } from '@ai-sdk/provider';
+import type { UserAI } from './user-settings';
 
 /**
  * LLM routing. Claude (./claude.ts, ANTHROPIC_API_KEY) goes first when configured; this file is the
@@ -203,4 +204,37 @@ export const llmFastModel = chainModel('fast');
 /** Server-side diagnostics only. */
 export function llmBackendNames(): string[] {
   return backends.map((b) => b.name);
+}
+
+/* ── per-user models (Settings → AI) ─────────────────────────────────────── */
+
+
+const userModels = new Map<string, LanguageModelV4>();
+
+/** An OpenAI-compatible chat model on the user's own key and endpoint (cached per key+model). */
+export function userChatModel(u: UserAI): LanguageModelV4 {
+  const id = `${u.provider}|${u.baseURL}|${u.model}|${u.apiKey}`;
+  let m = userModels.get(id);
+  if (!m) {
+    if (userModels.size > 200) userModels.clear();
+    const provider = createOpenAI({
+      name: `user-${u.provider}`,
+      baseURL: (u.baseURL || '').replace(/\/+$/, ''),
+      apiKey: u.apiKey,
+      headers: u.provider === 'openrouter' ? { 'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000', 'X-Title': 'Projust' } : undefined,
+      fetch: fetchWithConnectTimeout(30000),
+    });
+    m = provider.chat(u.model);
+    userModels.set(id, m);
+  }
+  return m;
+}
+
+/** A short label for the server's own AI, shown in Settings (no keys). */
+export function serverAILabel(): string | null {
+  if (process.env.ANTHROPIC_API_KEY) return `Claude · ${process.env.AI_CLAUDE_MODEL || 'claude-opus-5-5'}`;
+  if (process.env.LLM_ALT_BASE_URL && process.env.LLM_ALT_MODEL && process.env.LLM_ALT_API_KEY) return process.env.LLM_ALT_MODEL;
+  if (process.env.AI_SERVER_URL) return process.env.AI_SERVER_MODEL || 'projust-main';
+  if (process.env.LLM_API_KEY) return mainModelName;
+  return null;
 }

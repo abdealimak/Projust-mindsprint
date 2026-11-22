@@ -44,3 +44,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /.next-*/
+/.playwright-mcp/
+
+# every env file holds secrets; only the template is committed
+.env*
+!.env.example
